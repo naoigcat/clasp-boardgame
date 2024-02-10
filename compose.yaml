@@ -1,0 +1,16 @@
+services:
+  clasp:
+    build:
+      dockerfile_inline: |
+        FROM node:20.11.0-alpine3.19
+        RUN apk add curl && \
+            npm -v && \
+            npm i -g @google/clasp
+        WORKDIR /app
+        ENTRYPOINT [ "clasp" ]
+    volumes:
+      - login:/root
+      - $PWD:/app
+volumes:
+  login:
+    driver: local
