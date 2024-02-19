@@ -133,8 +133,9 @@ String.prototype.toNumber = function () {
  * @returns {Date}
  */
 Date.prototype.withDate = function (dayValue) {
-  this.setDate(dayValue);
-  return this;
+  let date = new Date(this.getTime());
+  date.setDate(dayValue);
+  return date;
 };
 
 /**
