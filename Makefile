@@ -2,6 +2,10 @@
 build:
 	docker compose build
 
+.PHONY: remove
+remove:
+	docker compose down --volumes
+
 .PHONY: login
 login:
 	docker compose run --rm --entrypoint bash clasp -c $$'clasp login & \n read url \n curl $$url \n wait'
