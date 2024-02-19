@@ -7,21 +7,22 @@ function onOpen() {
 
 function update() {
   let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Games");
-  var rows = sheet.getRange("$A$2:$A").getRichTextValues();
+  let rows = sheet.getRange("$A$2:$A").getRichTextValues();
   sheet
-    .getRange("$B$2:$U")
+    .getRange("$B$2:$V")
     .getValues()
     .forEach((row, index) => {
       rows[index] = rows[index].concat(row);
     });
   let last = rows.findIndex((row) => row[0].getText().length === 0);
   let current = new Date();
-  var count = 0;
+  let count = 0;
   rows = rows
     .slice(0, last)
     .map((row) => {
       // Clear columns containing values by ARRAYFORMULA
       row[2] = "";
+      row[5] = "";
       // Reduces the number of API executions because there is a 6 minute timeout
       if (count > 100) {
         return row;
@@ -31,7 +32,7 @@ function update() {
       if (url === null) {
         return row;
       }
-      let updated = row[20];
+      let updated = row[21];
       // Skip if you have been running the API within the past week
       if (updated && updated.withDate(updated.getDate() + 7) > current) {
         return row;
@@ -62,11 +63,11 @@ function update() {
               .getValue();
             return acc;
           }, {});
-        let indexes = [...Array(10)].map((v, i) => i + 6);
+        let indexes = [...Array(10)].map((v, i) => i + 7);
         indexes.forEach((index) => {
-          row[index] = numbers[(index - 4).toString()];
+          row[index] = numbers[(index - 5).toString()];
         });
-        row[15] = item
+        row[16] = item
           .getChild("statistics")
           .getChild("ratings")
           .getChild("ranks")
@@ -75,14 +76,14 @@ function update() {
           .getAttribute("value")
           .getValue()
           .toNumber();
-        row[16] = item
+        row[17] = item
           .getChild("statistics")
           .getChild("ratings")
           .getChild("bayesaverage")
           .getAttribute("value")
           .getValue()
           .toNumber();
-        row[17] = item
+        row[18] = item
           .getChild("statistics")
           .getChild("ratings")
           .getChild("averageweight")
@@ -99,16 +100,16 @@ function update() {
           .getAttribute("value")
           .getValue()
           .toNumber();
-        row[18] =
+        row[19] =
           minplaytime === maxplaytime
             ? minplaytime
             : `${minplaytime}-${maxplaytime}`;
-        row[19] = item
+        row[20] = item
           .getChild("yearpublished")
           .getAttribute("value")
           .getValue()
           .toNumber();
-        row[20] = current;
+        row[21] = current;
         return row;
       } catch (e) {
         Logger.log(e);
