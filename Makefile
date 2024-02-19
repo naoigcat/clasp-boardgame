@@ -4,7 +4,7 @@ build:
 
 .PHONY: login
 login:
-	docker compose run --rm --entrypoint sh clasp -c $$'clasp login & \n read url \n curl $$url \n wait'
+	docker compose run --rm --entrypoint bash clasp -c $$'clasp login & \n read url \n curl $$url \n wait'
 
 .PHONY: clone
 clone:

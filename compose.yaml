@@ -2,8 +2,9 @@ services:
   clasp:
     build:
       dockerfile_inline: |
-        FROM node:20.11.0-alpine3.19
-        RUN apk add curl && \
+        FROM node:20.11.1-bullseye-slim
+        RUN apt-get update && \
+            apt-get install -y curl && \
             npm -v && \
             npm i -g @google/clasp
         WORKDIR /app
