@@ -7,7 +7,7 @@ function onOpen() {
 
 function update() {
   let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Games");
-  let rows = sheet.getRange("$A$2:$A").getRichTextValues();
+  let rows: any[][] = sheet.getRange("$A$2:$A").getRichTextValues();
   sheet
     .getRange("$B$2:$V")
     .getValues()
@@ -32,7 +32,7 @@ function update() {
       if (url === null) {
         return row;
       }
-      let updated = row[21];
+      let updated = row[21] as Date;
       // Skip if you have been running the API within the past week
       if (updated && updated.withDate(updated.getDate() + 7) > current) {
         return row;
@@ -120,41 +120,40 @@ function update() {
   sheet.getRange(2, 2, rows.length, rows[0].length).setValues(rows);
 }
 
-/**
- * @returns {number|string}
- */
-String.prototype.toNumber = function () {
-  let number = Number.parseFloat(this);
-  return Number.isNaN(number) ? "N/A" : number;
+export {};
+
+declare global {
+  interface Array<T> {
+    findAttribute(name: string, value: string): T;
+    sortAttribute(name: string): T[];
+  }
+  interface Date {
+    withDate(dayValue: number): Date;
+  }
+  interface String {
+    toNumber(): number | "N/A";
+  }
+}
+
+Array.prototype.findAttribute = function <T extends GoogleAppsScript.XML_Service.Element>(name: string, value: string): T {
+  return this.find((element: GoogleAppsScript.XML_Service.Element) => {
+    return element.getAttribute(name).getValue() === value;
+  });
 };
 
-/**
- * @param {number} dayValue
- * @returns {Date}
- */
-Date.prototype.withDate = function (dayValue) {
+Array.prototype.sortAttribute = function <T extends GoogleAppsScript.XML_Service.Element>(name: string): T[] {
+  return this.sort((a: GoogleAppsScript.XML_Service.Element, b: GoogleAppsScript.XML_Service.Element) => {
+    return Number.parseInt(b.getAttribute(name).getValue()) - Number.parseInt(a.getAttribute(name).getValue());
+  });
+};
+
+Date.prototype.withDate = function (dayValue: number): Date {
   let date = new Date(this.getTime());
   date.setDate(dayValue);
   return date;
 };
 
-/**
- * @param {string} name
- * @param {string} value
- * @returns {any}
- */
-Array.prototype.findAttribute = function (name, value) {
-  return this.find((element) => {
-    return element.getAttribute(name).getValue() === value;
-  });
-};
-
-/**
- * @param {string} name
- * @returns {any[]}
- */
-Array.prototype.sortAttribute = function (name) {
-  return this.sort((a, b) => {
-    return b.getAttribute(name).getValue() - a.getAttribute(name).getValue();
-  });
+String.prototype.toNumber = function (): number | "N/A" {
+  let number = Number.parseFloat(this);
+  return Number.isNaN(number) ? "N/A" : number;
 };
