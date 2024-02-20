@@ -7,6 +7,9 @@ function onOpen() {
 
 function update() {
   let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Games");
+  if (sheet === null) {
+    return;
+  }
   let rows: any[][] = sheet.getRange("$A$2:$A").getRichTextValues();
   sheet
     .getRange("$B$2:$V")
