@@ -146,7 +146,8 @@ function updateRatings() {
         .match(
           '<div class="list--interests-item-title-japanese">(.*?)</div>'
         )[1]
-        .split("/")[0];
+        .split("/")[0]
+        .trim();
       let rating = matches[index].match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
       )[1];
