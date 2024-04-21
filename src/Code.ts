@@ -151,7 +151,13 @@ function updateRatings() {
       let rating = matches[index].match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
       )[1];
-      ratings.push([title, rating]);
+      switch (title) {
+        case "ドミニオン：錬金術＆収穫祭":
+          ratings.push(["ドミニオン：錬金術", rating]);
+          ratings.push(["ドミニオン：収穫祭", rating]);
+        default:
+          ratings.push([title, rating]);
+      }
     }
     Utilities.sleep(1000);
     page++;
