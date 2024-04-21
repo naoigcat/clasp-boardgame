@@ -147,6 +147,9 @@ function updateRatings() {
           '<div class="list--interests-item-title-japanese">(.*?)</div>'
         )[1]
         .split("/")[0]
+        .replace(new RegExp("（.*）"), "")
+        .replace("：新版", "")
+        .replace("&amp;", "＆")
         .trim();
       let rating = matches[index].match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
