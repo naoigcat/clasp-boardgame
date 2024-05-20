@@ -13,7 +13,7 @@ function updateGames() {
   }
   let rows: any[][] = sheet.getRange("$A$2:$A").getRichTextValues();
   sheet
-    .getRange("$B$2:$X")
+    .getRange("$B$2:$Y")
     .getValues()
     .forEach((row, index) => {
       rows[index] = rows[index].concat(row);
@@ -28,11 +28,11 @@ function updateGames() {
       return row;
     })
     .sort((a: any[], b: any[]) => {
-      return a[24] < b[24] ? -1 : a[24] > b[24] ? 1 : 0;
+      return a[25] < b[25] ? -1 : a[25] > b[25] ? 1 : 0;
     })
     .map((row: any[]) => {
       // Clear columns containing values by ARRAYFORMULA
-      [3, 6, 23].forEach((index) => {
+      [3, 6, 23, 24].forEach((index) => {
         row[index] = "";
       });
       // Reduces the number of API executions because there is a 6 minute timeout
@@ -44,7 +44,7 @@ function updateGames() {
       if (url === null) {
         return row;
       }
-      let updated = row[24] as Date;
+      let updated = row[25] as Date;
       // Skip if you have been running the API within the past week
       if (updated && updated.withDate(updated.getDate() + 7) > current) {
         return row;
@@ -122,7 +122,7 @@ function updateGames() {
           .getAttribute("value")
           .getValue()
           .toNumber();
-        row[24] = current;
+        row[25] = current;
         return row;
       } catch (e) {
         Logger.log(e);
