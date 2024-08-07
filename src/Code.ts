@@ -15,7 +15,7 @@ function updateGames() {
   sheet
     .getRange('$B$2:$Z')
     .getValues()
-    .forEach((row, index) => {
+    .forEach((row: any[], index: number) => {
       rows[index] = rows[index].concat(row);
     });
   let last = rows.findIndex((row: any[]) => row[0].getText().length === 0);
