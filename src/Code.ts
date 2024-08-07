@@ -6,6 +6,36 @@ function onOpen() {
     .addToUi();
 }
 
+const $ = {
+  __: 0,
+  _A: 1,
+  _B: 2,
+  _C: 3,
+  _D: 4,
+  _E: 5,
+  _F: 6,
+  _G: 7,
+  _H: 8,
+  _I: 9,
+  _J: 10,
+  _K: 11,
+  _L: 12,
+  _M: 13,
+  _N: 14,
+  _O: 15,
+  _P: 16,
+  _Q: 17,
+  _R: 18,
+  _S: 19,
+  _T: 20,
+  _U: 21,
+  _V: 22,
+  _W: 23,
+  _X: 24,
+  _Y: 25,
+  _Z: 26,
+} as const;
+
 function updateGames() {
   let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Games');
   if (sheet === null) {
@@ -28,23 +58,23 @@ function updateGames() {
       return row;
     })
     .sort((a: any[], b: any[]) => {
-      return a[25] < b[25] ? -1 : a[25] > b[25] ? 1 : 0;
+      return a[$._Y] < b[$._Y] ? -1 : a[$._Y] > b[$._Y] ? 1 : 0;
     })
     .map((row: any[]) => {
       // Clear columns containing values by ARRAYFORMULA
-      [3, 6, 23, 24].forEach((index) => {
+      [$._C, $._F, $._W, $._X].forEach((index) => {
         row[index] = '';
       });
       // Reduces the number of API executions because there is a 6 minute timeout
       if (count > 100) {
         return row;
       }
-      Logger.log(row[1].getText());
-      let url = row[1].getLinkUrl();
+      Logger.log(row[$._A].getText());
+      let url = row[$._A].getLinkUrl();
       if (url === null) {
         return row;
       }
-      let updated = row[25] as Date;
+      let updated = row[$._Y] as Date;
       // Skip if you have been running the API within the past week
       if (updated && updated.withDate(updated.getDate() + 7) > current) {
         return row;
@@ -76,11 +106,11 @@ function updateGames() {
             return acc;
           }, {});
         Logger.log(numbers);
-        let indexes = [...Array(10)].map((v, i) => i + 9);
+        let indexes = [...Array(10)].map((v, i) => i + $._I);
         indexes.forEach((index) => {
-          row[index] = numbers[(index - 7).toString()];
+          row[index] = numbers[(index - $._G).toString()];
         });
-        row[18] = item
+        row[$._R] = item
           .getChild('statistics')
           .getChild('ratings')
           .getChild('ranks')
@@ -89,14 +119,14 @@ function updateGames() {
           .getAttribute('value')
           .getValue()
           .toNumber();
-        row[19] = item
+        row[$._S] = item
           .getChild('statistics')
           .getChild('ratings')
           .getChild('bayesaverage')
           .getAttribute('value')
           .getValue()
           .toNumber();
-        row[20] = item
+        row[$._T] = item
           .getChild('statistics')
           .getChild('ratings')
           .getChild('averageweight')
@@ -113,16 +143,16 @@ function updateGames() {
           .getAttribute('value')
           .getValue()
           .toNumber();
-        row[21] =
+        row[$._U] =
           minplaytime === maxplaytime
             ? minplaytime
             : `${minplaytime}-${maxplaytime}`;
-        row[22] = item
+        row[$._V] = item
           .getChild('yearpublished')
           .getAttribute('value')
           .getValue()
           .toNumber();
-        row[25] = current;
+        row[$._Y] = current;
         return row;
       } catch (e) {
         Logger.log(e);
@@ -130,10 +160,10 @@ function updateGames() {
       }
     })
     .sort((a: any[], b: any[]) => {
-      return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+      return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
     })
-    .map((row: any[]) => row.slice(2));
-  sheet.getRange(2, 2, rows.length, rows[0].length).setValues(rows);
+    .map((row: any[]) => row.slice($._B));
+  sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
 }
 
 function updateRatings() {
