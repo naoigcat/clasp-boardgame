@@ -222,7 +222,7 @@ declare global {
     withDate(dayValue: number): Date;
   }
   interface String {
-    toNumber(): number | "N/A";
+    toNumber(): number | 'N/A';
   }
 }
 
@@ -256,7 +256,7 @@ Date.prototype.withDate = function (dayValue: number): Date {
   return date;
 };
 
-String.prototype.toNumber = function (): number | "N/A" {
+String.prototype.toNumber = function (): number | 'N/A' {
   let number = Number.parseFloat(this);
-  return Number.isNaN(number) ? "N/A" : number;
+  return Number.isNaN(number) ? 'N/A' : number;
 };
