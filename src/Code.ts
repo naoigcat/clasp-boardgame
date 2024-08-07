@@ -58,11 +58,11 @@ function updateGames() {
       return row;
     })
     .sort((a: any[], b: any[]) => {
-      return a[$._Y] < b[$._Y] ? -1 : a[$._Y] > b[$._Y] ? 1 : 0;
+      return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
     })
     .map((row: any[]) => {
       // Clear columns containing values by ARRAYFORMULA
-      [$._C, $._F, $._W, $._X].forEach((index) => {
+      [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
         row[index] = '';
       });
       // Reduces the number of API executions because there is a 6 minute timeout
@@ -74,7 +74,7 @@ function updateGames() {
       if (url === null) {
         return row;
       }
-      let updated = row[$._Y] as Date;
+      let updated = row[$._Z] as Date;
       // Skip if you have been running the API within the past week
       if (updated && updated.withDate(updated.getDate() + 7) > current) {
         return row;
@@ -152,7 +152,7 @@ function updateGames() {
           .getAttribute('value')
           .getValue()
           .toNumber();
-        row[$._Y] = current;
+        row[$._Z] = current;
         return row;
       } catch (e) {
         Logger.log(e);
