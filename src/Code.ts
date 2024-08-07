@@ -1,19 +1,19 @@
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("Functions")
-    .addItem("Update Games", "updateGames")
-    .addItem("Update Ratings", "updateRatings")
+    .createMenu('Functions')
+    .addItem('Update Games', 'updateGames')
+    .addItem('Update Ratings', 'updateRatings')
     .addToUi();
 }
 
 function updateGames() {
-  let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Games");
+  let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Games');
   if (sheet === null) {
     return;
   }
-  let rows: any[][] = sheet.getRange("$A$2:$A").getRichTextValues();
+  let rows: any[][] = sheet.getRange('$A$2:$A').getRichTextValues();
   sheet
-    .getRange("$B$2:$Y")
+    .getRange('$B$2:$Z')
     .getValues()
     .forEach((row, index) => {
       rows[index] = rows[index].concat(row);
@@ -33,7 +33,7 @@ function updateGames() {
     .map((row: any[]) => {
       // Clear columns containing values by ARRAYFORMULA
       [3, 6, 23, 24].forEach((index) => {
-        row[index] = "";
+        row[index] = '';
       });
       // Reduces the number of API executions because there is a 6 minute timeout
       if (count > 100) {
@@ -50,8 +50,8 @@ function updateGames() {
         return row;
       }
       try {
-        let type = url.split("/")[3];
-        let id = url.split("/")[4];
+        let type = url.split('/')[3];
+        let id = url.split('/')[4];
         let endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
         Logger.log(endpoint);
         let response = UrlFetchApp.fetch(endpoint);
@@ -62,16 +62,16 @@ function updateGames() {
         }
         let item = XmlService.parse(response.getContentText())
           .getRootElement()
-          .getChild("item");
+          .getChild('item');
         let numbers = item
-          .getChildren("poll")
-          .findAttribute("name", "suggested_numplayers")
-          .getChildren("results")
+          .getChildren('poll')
+          .findAttribute('name', 'suggested_numplayers')
+          .getChildren('results')
           .reduce((acc, results) => {
-            acc[results.getAttribute("numplayers").getValue()] = results
-              .getChildren("result")
-              .sortAttribute("numvotes")[0]
-              .getAttribute("value")
+            acc[results.getAttribute('numplayers').getValue()] = results
+              .getChildren('result')
+              .sortAttribute('numvotes')[0]
+              .getAttribute('value')
               .getValue();
             return acc;
           }, {});
@@ -81,36 +81,36 @@ function updateGames() {
           row[index] = numbers[(index - 7).toString()];
         });
         row[18] = item
-          .getChild("statistics")
-          .getChild("ratings")
-          .getChild("ranks")
-          .getChildren("rank")
-          .findAttribute("name", "boardgame")
-          .getAttribute("value")
+          .getChild('statistics')
+          .getChild('ratings')
+          .getChild('ranks')
+          .getChildren('rank')
+          .findAttribute('name', 'boardgame')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         row[19] = item
-          .getChild("statistics")
-          .getChild("ratings")
-          .getChild("bayesaverage")
-          .getAttribute("value")
+          .getChild('statistics')
+          .getChild('ratings')
+          .getChild('bayesaverage')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         row[20] = item
-          .getChild("statistics")
-          .getChild("ratings")
-          .getChild("averageweight")
-          .getAttribute("value")
+          .getChild('statistics')
+          .getChild('ratings')
+          .getChild('averageweight')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         let minplaytime = item
-          .getChild("minplaytime")
-          .getAttribute("value")
+          .getChild('minplaytime')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         let maxplaytime = item
-          .getChild("maxplaytime")
-          .getAttribute("value")
+          .getChild('maxplaytime')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         row[21] =
@@ -118,8 +118,8 @@ function updateGames() {
             ? minplaytime
             : `${minplaytime}-${maxplaytime}`;
         row[22] = item
-          .getChild("yearpublished")
-          .getAttribute("value")
+          .getChild('yearpublished')
+          .getAttribute('value')
           .getValue()
           .toNumber();
         row[25] = current;
@@ -137,17 +137,17 @@ function updateGames() {
 }
 
 function updateRatings() {
-  let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Ratings");
+  let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Ratings');
   if (sheet === null) {
     return;
   }
-  let base = "https://bodoge.hoobby.net/friends/16159/boardgames/played?page=";
+  let base = 'https://bodoge.hoobby.net/friends/16159/boardgames/played?page=';
   let page = 1;
   let ratings = [];
   while (true) {
     let html = UrlFetchApp.fetch(base + page.toString()).getContentText();
     let matches = html.match(
-      new RegExp('<a class="list--interests-item-title".*?</a>', "g")
+      new RegExp('<a class="list--interests-item-title".*?</a>', 'g')
     );
     if (!matches || matches.length === 0) {
       break;
@@ -157,18 +157,18 @@ function updateRatings() {
         .match(
           '<div class="list--interests-item-title-japanese">(.*?)</div>'
         )[1]
-        .split("/")[0]
-        .replace(new RegExp("（.*）"), "")
-        .replace("：新版", "")
-        .replace("&amp;", "＆")
+        .split('/')[0]
+        .replace(new RegExp('（.*）'), '')
+        .replace('：新版', '')
+        .replace('&amp;', '＆')
         .trim();
       let rating = matches[index].match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
       )[1];
       switch (title) {
-        case "ドミニオン：錬金術＆収穫祭":
-          ratings.push(["ドミニオン：錬金術", rating]);
-          ratings.push(["ドミニオン：収穫祭", rating]);
+        case 'ドミニオン：錬金術＆収穫祭':
+          ratings.push(['ドミニオン：錬金術', rating]);
+          ratings.push(['ドミニオン：収穫祭', rating]);
         default:
           ratings.push([title, rating]);
       }
