@@ -41,7 +41,13 @@ function updateGames() {
   if (sheet === null) {
     return;
   }
-  let rows: any[][] = sheet.getRange('$A$2:$A').getRichTextValues();
+  let rows: any[][] = sheet
+    .getRange('$A$2:$A')
+    .getRichTextValues()
+    .map((row: any[], index: number) => {
+      row.unshift(index);
+      return row;
+    });
   sheet
     .getRange('$B$2:$Z')
     .getValues()
@@ -53,10 +59,6 @@ function updateGames() {
   let count = 0;
   rows = rows
     .slice(0, last)
-    .map((row: any[], index: number) => {
-      row.unshift(index);
-      return row;
-    })
     .sort((a: any[], b: any[]) => {
       return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
     })
