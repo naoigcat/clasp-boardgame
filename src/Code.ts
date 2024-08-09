@@ -2,6 +2,8 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Functions')
     .addItem('Update Games', 'updateGames')
+    .addItem('Update Arena Rankings', 'updateArenaRankings')
+    .addItem('Update Arena Titles', 'updateArenaTitles')
     .addItem('Update Ratings', 'updateRatings')
     .addToUi();
 }
@@ -168,6 +170,160 @@ function updateGames() {
     })
     .map((row: any[]) => row.slice($._B));
   sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
+}
+
+function updateArenaRankings() {
+  let rankings =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Rankings');
+  if (rankings === null) {
+    return;
+  }
+  let html = UrlFetchApp.fetch(
+    'https://ja.boardgamearena.com'
+  ).getContentText();
+  let tagMatches = html
+    .match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m)[1]
+    .match(/\{"id":[\s\S]*?\}/gm);
+  let tagMaster = {};
+  for (let index = 0; index < tagMatches.length; index++) {
+    let tag: object;
+    try {
+      tag = JSON.parse(tagMatches[index]);
+    } catch (e) {
+      Logger.log(`Error: ${e.message}\n${tagMatches[index]}`);
+      throw e;
+    }
+    tagMaster[tag['id']] = tag['name'];
+  }
+  let gameMatches = html
+    .match(/"game_list":([\s\S]*),\n?\s*"game_tags"/m)[1]
+    .match(/\{"id":[\s\S]*?"watched":[\s\S]*?\}/gm);
+  let games = [];
+  for (let index = 0; index < gameMatches.length; index++) {
+    let game: object;
+    try {
+      game = JSON.parse(gameMatches[index]);
+    } catch (e) {
+      Logger.log(`Error: ${e.message}\n${gameMatches[index]}`);
+      throw e;
+    }
+    let tags = [];
+    for (let tagIndex = 0; tagIndex < game['tags'].length; tagIndex++) {
+      let tagNumber = game['tags'][tagIndex][0];
+      switch (tagNumber) {
+        case 2: // 難易度:易しい
+        case 3: // 難易度:普通
+        case 4: // 難易度:難しい
+        case 10: // 短時間ゲーム
+        case 11: // 並の長さのゲーム
+        case 12: // 長時間ゲーム
+        case 20: // 賞を受けたゲーム
+        case 21: // 新しい
+        case 28: // リアルタイム推奨
+        case 29: // ターンベース推奨
+        case 31: // モバイルでも良好
+        case 300: // Tags checked
+        case 301: // PHP8
+          continue;
+      }
+      tags.push(tagMaster[tagNumber]);
+    }
+    games.push([
+      `https://ja.boardgamearena.com/gamepanel?game=${game['name']}`,
+      null,
+      tags.join(' '),
+      game['games_played'],
+      game['average_duration'],
+      game['default_num_players'],
+      game['player_numbers'].includes(2),
+      game['player_numbers'].includes(3),
+      game['player_numbers'].includes(4),
+      game['player_numbers'].includes(5),
+      game['player_numbers'].includes(6),
+      game['player_numbers'].includes(7),
+      game['player_numbers'].includes(8),
+      game['player_numbers'].includes(9),
+      game['player_numbers'].includes(10),
+    ]);
+  }
+  rankings
+    .getRange(2, 1, rankings.getLastRow() - 1, games[0].length)
+    .clearContent();
+  rankings.getRange(2, 1, games.length, games[0].length).setValues(games);
+}
+
+function updateArenaTitles() {
+  let rankings =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Rankings');
+  if (rankings === null) {
+    return;
+  }
+  let titles =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Titles');
+  if (titles === null) {
+    return;
+  }
+  let count = 0;
+  let rows: any[][] = titles
+    .getRange('$A$2:$C')
+    .getValues()
+    .filter((row: any[]) => row[$._A - 1]);
+  rows = rows.concat(
+    rankings
+      .getRange('$A$2:$A')
+      .getValues()
+      .filter((ranking: any[]) => {
+        return !rows
+          .map((row: any[]) => row[$._A - 1])
+          .includes(ranking[$._A - 1]);
+      })
+      .map((ranking: any[]) => {
+        return [ranking[0], '', ''];
+      })
+  );
+  rows = rows
+    .map((row: any[], index: number) => {
+      row.unshift(index);
+      return row;
+    })
+    .map((row: any[]) => {
+      let url = row[$._A];
+      let title = row[$._B];
+      if (title) {
+        return row;
+      }
+      // Reduces the number of API executions because there is a 6 minute timeout
+      if (count > 100) {
+        return row;
+      }
+      try {
+        title = UrlFetchApp.fetch(url)
+          .getContentText()
+          .match(
+            /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m
+          )[1]
+          .replace(/&amp;/g, '＆');
+      } catch (e) {
+        Logger.log(`Error: ${e.message}\n${url}`);
+        return row;
+      } finally {
+        Utilities.sleep(1000);
+        count++;
+      }
+      row[$._B] = title;
+      return row;
+    })
+    .map((row: any[]) => {
+      let title = row[$._B];
+      title = title.replace(/-.*-/, '');
+      row[$._C] = title;
+      return row;
+    })
+    .sort((a: any[], b: any[]) => {
+      return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
+    })
+    .map((row: any[]) => row.slice($._A));
+  titles.getRange(2, $._A, rows.length, rows[0].length).setValues(rows);
 }
 
 function updateRatings() {
