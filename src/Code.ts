@@ -54,11 +54,13 @@ function updateGames() {
     .forEach((row: any[], index: number) => {
       rows[index] = rows[index].concat(row);
     });
-  let last = rows.findIndex((row: any[]) => row[0].getText().length === 0);
   let current = new Date();
   let count = 0;
   rows = rows
-    .slice(0, last)
+    .slice(
+      0,
+      rows.findIndex((row: any[]) => row[$._A].getText().length === 0)
+    )
     .sort((a: any[], b: any[]) => {
       return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
     })
