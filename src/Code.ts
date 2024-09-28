@@ -112,6 +112,12 @@ function updateGames() {
             return acc;
           }, {});
         Logger.log(numbers);
+        if (id === 8172) {
+          numbers['7'] = 'Recommended';
+          numbers['8'] = 'Recommended';
+          numbers['9'] = 'Recommended';
+          numbers['10'] = 'Recommended';
+        }
         let indexes = [...Array(10)].map((v, i) => i + $._I);
         indexes.forEach((index) => {
           row[index] = numbers[(index - $._G).toString()];
@@ -301,8 +307,7 @@ function updateArenaTitles() {
           .getContentText()
           .match(
             /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m
-          )[1]
-          .replace(/&amp;/g, '＆');
+          )[1];
       } catch (e) {
         Logger.log(`Error: ${e.message}\n${url}`);
         return row;
@@ -314,8 +319,35 @@ function updateArenaTitles() {
       return row;
     })
     .map((row: any[]) => {
-      let title = row[$._B];
-      title = title.replace(/-.*-/, '');
+      let title = row[$._B].toString();
+      if (typeof title.replace === 'function') {
+        title = title.replace(/-.*-/g, '');
+        title = title.replace(/&amp;/g, '＆');
+        title = title.replace(/!/g, '！');
+        title = title.replace(/ - /g, ' － ');
+        title = title.replace(/《?新版》?/g, '');
+        title = title.replace(/\s*･\s*/g, '・');
+        title = title.replace(/\s*:\s*/g, '：');
+        title = title.replace(/^\s+|\s+$/g, '');
+        title = title.replace(/^テラフォーミング・マーズ$/, 'テラフォーミングマーズ');
+        title = title.replace(/^チケット・トゥ・ライド/, 'チケットトゥライド');
+        title = title.replace(/^ブルゴーニュの城$/, 'ブルゴーニュ');
+        title = title.replace(/^サイズ$/, 'サイズ -大鎌戦役-');
+        title = title.replace(/^ザ・クルー 深海に眠る遺跡$/, 'ザ・クルー：深海に眠る遺跡');
+        title = title.replace(/^パンデミック$/, 'パンデミック：新たなる試練');
+        title = title.replace(/^ドラフト＆ライトレコーズ$/, 'ドラフト・アンド・ライト・レコード');
+        title = title.replace(/^ラッキーナンバー$/, 'ラッキー・ナンバー');
+        title = title.replace(/^ガイアプロジェクト$/, 'テラミスティカ：ガイアプロジェクト');
+        title = title.replace(/^タペストリー ～文明の錦の御旗～$/, 'タペストリー');
+        title = title.replace(/^メモワール44$/, 'メモワール\'44');
+        title = title.replace(/^レイルロード・インク$/, 'レイルロード・インク：ディープブルー・エディション');
+        title = title.replace(/^キャプテン・フリップ$/, 'キャプテンフリップ');
+        title = title.replace(/^リビング・フォレスト$/, 'リビングフォレスト');
+        title = title.replace(/^アルハンブラ$/, 'アルハンブラの宮殿');
+        title = title.replace(/^バニーキングダム$/, 'バニー・キングダム');
+        title = title.replace(/^アイル・オブ・キャッツ ～ネコたちの楽園～$/, 'アイル・オブ・キャッツ');
+        title = title.replace(/^センチュリー：スパイスロード$/, 'センチュリー；ゴーレム');
+      }
       row[$._C] = title;
       return row;
     })
@@ -350,17 +382,28 @@ function updateRatings() {
         .split('/')[0]
         .replace(new RegExp('（.*）'), '')
         .replace('：新版', '')
+        .replace('（拡張）', '')
         .replace('&amp;', '＆')
         .trim();
       let rating = matches[index].match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
       )[1];
       switch (title) {
+        case 'ドミニオン：基本カードセット':
+          break;
         case 'ドミニオン：錬金術＆収穫祭':
           ratings.push(['ドミニオン：錬金術', rating]);
           ratings.push(['ドミニオン：収穫祭', rating]);
+          break;
+        case 'ハートオブクラウン：セカンドエディション':
+          ratings.push(['ハートオブクラウン', rating]);
+          break;
+        case 'ヒューゴ オバケと鬼ごっこ':
+          ratings.push(['ヒューゴ：オバケと鬼ごっこ', rating]);
+          break;
         default:
           ratings.push([title, rating]);
+          break;
       }
     }
     Utilities.sleep(1000);
