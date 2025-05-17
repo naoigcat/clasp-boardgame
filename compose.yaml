@@ -2,7 +2,7 @@ services:
   clasp:
     build:
       dockerfile_inline: |
-        FROM node:20.11.1-bullseye-slim
+        FROM node:24.0.2-bookworm-slim
         RUN apt-get update && \
             apt-get install -y curl && \
             npm -v && \

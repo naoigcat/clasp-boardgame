@@ -76,7 +76,7 @@ function updateGames() {
         return row;
       }
       Logger.log(row[$._A].getText());
-      let url = row[$._A].getLinkUrl();
+      const url = row[$._A].getLinkUrl();
       if (url === null) {
         return row;
       }
@@ -86,24 +86,28 @@ function updateGames() {
         return row;
       }
       try {
-        let type = url.split('/')[3];
-        let id = url.split('/')[4];
-        let endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
+        const type = url.split('/')[3];
+        const id = url.split('/')[4];
+        const endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
         Logger.log(endpoint);
-        let response = UrlFetchApp.fetch(endpoint);
+        const response = UrlFetchApp.fetch(endpoint);
         Utilities.sleep(2000);
         count++;
         if (response.getResponseCode() !== 200) {
           return row;
         }
-        let item = XmlService.parse(response.getContentText())
-          .getRootElement()
-          .getChild('item');
+        const body = response.getContentText();
+        const item = XmlService.parse(body).getRootElement().getChild('item');
+        if (item === null) {
+          Logger.log('item is null');
+          Logger.log(body);
+          return row;
+        }
         let numbers = item
           .getChildren('poll')
           .findAttribute('name', 'suggested_numplayers')
           .getChildren('results')
-          .reduce((acc, results) => {
+          .reduce((acc: any, results: any) => {
             acc[results.getAttribute('numplayers').getValue()] = results
               .getChildren('result')
               .sortAttribute('numvotes')[0]
@@ -118,7 +122,7 @@ function updateGames() {
           numbers['9'] = 'Recommended';
           numbers['10'] = 'Recommended';
         }
-        let indexes = [...Array(10)].map((v, i) => i + $._I);
+        const indexes = [...Array(10)].map((v, i) => i + $._I);
         indexes.forEach((index) => {
           row[index] = numbers[(index - $._G).toString()];
         });
@@ -187,30 +191,40 @@ function updateArenaRankings() {
   let html = UrlFetchApp.fetch(
     'https://ja.boardgamearena.com'
   ).getContentText();
-  let tagMatches = html
-    .match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m)[1]
-    .match(/\{"id":[\s\S]*?\}/gm);
-  let tagMaster = {};
+  let tagMatches =
+    (html.match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m) || [])[1].match(
+      /\{"id":[\s\S]*?\}/gm
+    ) || [];
+  let tagMaster: { [key: string]: string } = {};
   for (let index = 0; index < tagMatches.length; index++) {
-    let tag: object;
+    let tag: { [key: string]: any };
     try {
       tag = JSON.parse(tagMatches[index]);
-    } catch (e) {
-      Logger.log(`Error: ${e.message}\n${tagMatches[index]}`);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        Logger.log(`Error: ${e.message}\n${tagMatches[index]}`);
+      } else {
+        Logger.log(`Unknown error: ${String(e)}\n${tagMatches[index]}`);
+      }
       throw e;
     }
     tagMaster[tag['id']] = tag['name'];
   }
-  let gameMatches = html
-    .match(/"game_list":([\s\S]*),\n?\s*"game_tags"/m)[1]
-    .match(/\{"id":[\s\S]*?"watched":[\s\S]*?\}/gm);
+  let gameMatches =
+    (html.match(/"game_list":([\s\S]*),\n?\s*"game_tags"/m) || [])[1].match(
+      /\{"id":[\s\S]*?"watched":[\s\S]*?\}/gm
+    ) || [];
   let games = [];
   for (let index = 0; index < gameMatches.length; index++) {
-    let game: object;
+    let game: { [key: string]: any };
     try {
       game = JSON.parse(gameMatches[index]);
-    } catch (e) {
-      Logger.log(`Error: ${e.message}\n${gameMatches[index]}`);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        Logger.log(`Error: ${e.message}\n${gameMatches[index]}`);
+      } else {
+        Logger.log(`Unknown error: ${String(e)}\n${gameMatches[index]}`);
+      }
       throw e;
     }
     let tags = [];
@@ -303,13 +317,17 @@ function updateArenaTitles() {
         return row;
       }
       try {
-        title = UrlFetchApp.fetch(url)
+        title = (UrlFetchApp.fetch(url)
           .getContentText()
           .match(
             /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m
-          )[1];
-      } catch (e) {
-        Logger.log(`Error: ${e.message}\n${url}`);
+          ) || [])[1];
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          Logger.log(`Error: ${e.message}\n${url}`);
+        } else {
+          Logger.log(`Unknown error: ${String(e)}\n${url}`);
+        }
         return row;
       } finally {
         Utilities.sleep(1000);
@@ -329,24 +347,48 @@ function updateArenaTitles() {
         title = title.replace(/\s*･\s*/g, '・');
         title = title.replace(/\s*:\s*/g, '：');
         title = title.replace(/^\s+|\s+$/g, '');
-        title = title.replace(/^テラフォーミング・マーズ$/, 'テラフォーミングマーズ');
+        title = title.replace(
+          /^テラフォーミング・マーズ$/,
+          'テラフォーミングマーズ'
+        );
         title = title.replace(/^チケット・トゥ・ライド/, 'チケットトゥライド');
         title = title.replace(/^ブルゴーニュの城$/, 'ブルゴーニュ');
         title = title.replace(/^サイズ$/, 'サイズ -大鎌戦役-');
-        title = title.replace(/^ザ・クルー 深海に眠る遺跡$/, 'ザ・クルー：深海に眠る遺跡');
+        title = title.replace(
+          /^ザ・クルー 深海に眠る遺跡$/,
+          'ザ・クルー：深海に眠る遺跡'
+        );
         title = title.replace(/^パンデミック$/, 'パンデミック：新たなる試練');
-        title = title.replace(/^ドラフト＆ライトレコーズ$/, 'ドラフト・アンド・ライト・レコード');
+        title = title.replace(
+          /^ドラフト＆ライトレコーズ$/,
+          'ドラフト・アンド・ライト・レコード'
+        );
         title = title.replace(/^ラッキーナンバー$/, 'ラッキー・ナンバー');
-        title = title.replace(/^ガイアプロジェクト$/, 'テラミスティカ：ガイアプロジェクト');
-        title = title.replace(/^タペストリー ～文明の錦の御旗～$/, 'タペストリー');
-        title = title.replace(/^メモワール44$/, 'メモワール\'44');
-        title = title.replace(/^レイルロード・インク$/, 'レイルロード・インク：ディープブルー・エディション');
+        title = title.replace(
+          /^ガイアプロジェクト$/,
+          'テラミスティカ：ガイアプロジェクト'
+        );
+        title = title.replace(
+          /^タペストリー ～文明の錦の御旗～$/,
+          'タペストリー'
+        );
+        title = title.replace(/^メモワール44$/, "メモワール'44");
+        title = title.replace(
+          /^レイルロード・インク$/,
+          'レイルロード・インク：ディープブルー・エディション'
+        );
         title = title.replace(/^キャプテン・フリップ$/, 'キャプテンフリップ');
         title = title.replace(/^リビング・フォレスト$/, 'リビングフォレスト');
         title = title.replace(/^アルハンブラ$/, 'アルハンブラの宮殿');
         title = title.replace(/^バニーキングダム$/, 'バニー・キングダム');
-        title = title.replace(/^アイル・オブ・キャッツ ～ネコたちの楽園～$/, 'アイル・オブ・キャッツ');
-        title = title.replace(/^センチュリー：スパイスロード$/, 'センチュリー；ゴーレム');
+        title = title.replace(
+          /^アイル・オブ・キャッツ ～ネコたちの楽園～$/,
+          'アイル・オブ・キャッツ'
+        );
+        title = title.replace(
+          /^センチュリー：スパイスロード$/,
+          'センチュリー；ゴーレム'
+        );
       }
       row[$._C] = title;
       return row;
@@ -368,26 +410,26 @@ function updateRatings() {
   let ratings = [];
   while (true) {
     let html = UrlFetchApp.fetch(base + page.toString()).getContentText();
-    let matches = html.match(
-      new RegExp('<a class="list--interests-item-title".*?</a>', 'g')
-    );
-    if (!matches || matches.length === 0) {
+    let matches =
+      html.match(
+        new RegExp('<a class="list--interests-item-title".*?</a>', 'g')
+      ) || [];
+    if (matches.length === 0) {
       break;
     }
     for (let index = 0; index < matches.length; index++) {
-      let title = matches[index]
-        .match(
-          '<div class="list--interests-item-title-japanese">(.*?)</div>'
-        )[1]
+      let title = ((matches[index] || '').match(
+        '<div class="list--interests-item-title-japanese">(.*?)</div>'
+      ) || [])[1]
         .split('/')[0]
         .replace(new RegExp('（.*）'), '')
         .replace('：新版', '')
         .replace('（拡張）', '')
         .replace('&amp;', '＆')
         .trim();
-      let rating = matches[index].match(
+      let rating = ((matches[index] || '').match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
-      )[1];
+      ) || [])[1];
       switch (title) {
         case 'ドミニオン：基本カードセット':
           break;
@@ -414,43 +456,30 @@ function updateRatings() {
   sheet.getRange(2, 1, ratings.length, 2).setValues(ratings);
 }
 
-export {};
-
-declare global {
-  interface Array<T> {
-    findAttribute(name: string, value: string): T;
-    sortAttribute(name: string): T[];
-  }
-  interface Date {
-    withDate(dayValue: number): Date;
-  }
-  interface String {
-    toNumber(): number | 'N/A';
-  }
+interface Array<T> {
+  findAttribute(name: string, value: string): any;
+  sortAttribute(name: string): any[];
+}
+interface Date {
+  withDate(dayValue: number): Date;
+}
+interface String {
+  toNumber(): number | 'N/A';
 }
 
-Array.prototype.findAttribute = function <
-  T extends GoogleAppsScript.XML_Service.Element
->(name: string, value: string): T {
-  return this.find((element: GoogleAppsScript.XML_Service.Element) => {
+Array.prototype.findAttribute = function (name: string, value: string): any {
+  return this.find((element: any) => {
     return element.getAttribute(name).getValue() === value;
   });
 };
 
-Array.prototype.sortAttribute = function <
-  T extends GoogleAppsScript.XML_Service.Element
->(name: string): T[] {
-  return this.sort(
-    (
-      a: GoogleAppsScript.XML_Service.Element,
-      b: GoogleAppsScript.XML_Service.Element
-    ) => {
-      return (
-        Number.parseInt(b.getAttribute(name).getValue()) -
-        Number.parseInt(a.getAttribute(name).getValue())
-      );
-    }
-  );
+Array.prototype.sortAttribute = function (name: string): any[] {
+  return this.sort((a: any, b: any) => {
+    return (
+      Number.parseInt(b.getAttribute(name).getValue()) -
+      Number.parseInt(a.getAttribute(name).getValue())
+    );
+  });
 };
 
 Date.prototype.withDate = function (dayValue: number): Date {
@@ -460,6 +489,6 @@ Date.prototype.withDate = function (dayValue: number): Date {
 };
 
 String.prototype.toNumber = function (): number | 'N/A' {
-  let number = Number.parseFloat(this);
+  let number = Number.parseFloat(this as string);
   return Number.isNaN(number) ? 'N/A' : number;
 };

@@ -20,6 +20,7 @@ pull:
 
 .PHONY: push
 push:
+	docker compose run --rm --entrypoint bash clasp -c 'npx tsc' && \
 	docker compose run --rm clasp push
 
 .PHONY: install
