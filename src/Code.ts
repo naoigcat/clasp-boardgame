@@ -431,6 +431,9 @@ function updateRatings() {
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
       ) || [])[1];
       switch (title) {
+        case '#hashtag':
+          ratings.push(['ハッシュタグ', rating]);
+          break;
         case 'ドミニオン：基本カードセット':
           break;
         case 'ドミニオン：錬金術＆収穫祭':
