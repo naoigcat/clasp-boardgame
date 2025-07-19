@@ -446,6 +446,9 @@ function updateRatings() {
         case 'ヒューゴ オバケと鬼ごっこ':
           ratings.push(['ヒューゴ：オバケと鬼ごっこ', rating]);
           break;
+        case 'ダンス・オブ・アイベックス':
+          ratings.push(['ヤギたちのダンス', rating]);
+          break;
         default:
           ratings.push([title, rating]);
           break;
