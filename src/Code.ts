@@ -69,6 +69,7 @@ function updateGames() {
     });
   let current = new Date();
   let count = 0;
+  let errors: string[] = [];
   try {
     rows = rows
       .slice(
@@ -191,6 +192,9 @@ function updateGames() {
           Logger.log(
             `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`
           );
+          errors.push(
+            `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`
+          );
           return row;
         }
       })
@@ -202,6 +206,10 @@ function updateGames() {
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     Logger.log(`Failed after processing ${count} rows: ${errorMessage}`);
+    throw e;
+  }
+  if (errors.length > 0) {
+    throw new Error(errors.join('\n'));
   }
 }
 
