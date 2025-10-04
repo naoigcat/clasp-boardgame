@@ -206,7 +206,13 @@ function updateGames() {
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     Logger.log(`Failed after processing ${count} rows: ${errorMessage}`);
-    throw e;
+    // Combine outer error with collected row-specific errors if any exist
+    if (errors.length > 0) {
+      errors.push(`Failed after processing ${count} rows: ${errorMessage}`);
+      throw new Error(errors.join('\n'));
+    } else {
+      throw e;
+    }
   }
   if (errors.length > 0) {
     throw new Error(errors.join('\n'));
