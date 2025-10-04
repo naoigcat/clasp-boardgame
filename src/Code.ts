@@ -94,7 +94,7 @@ function updateGames() {
         }
         let updated = row[$._Z] as Date;
         // Skip if you have been running the API within the past week
-        if (updated && updated.withDate(updated.getDate() + 7) > current) {
+        if (updated && updated.addDays(7) > current) {
           return row;
         }
         try {
@@ -490,7 +490,7 @@ interface Array<T> {
   sortAttribute(name: string): any[];
 }
 interface Date {
-  withDate(dayValue: number): Date;
+  addDays(days: number): Date;
 }
 interface String {
   toNumber(): number | 'N/A';
@@ -511,9 +511,9 @@ Array.prototype.sortAttribute = function (name: string): any[] {
   });
 };
 
-Date.prototype.withDate = function (dayValue: number): Date {
+Date.prototype.addDays = function (days: number): Date {
   let date = new Date(this.getTime());
-  date.setDate(dayValue);
+  date.setDate(date.getDate() + days);
   return date;
 };
 
