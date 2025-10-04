@@ -38,6 +38,17 @@ const $ = {
   _Z: 26,
 } as const;
 
+// Game-specific overrides for player count recommendations
+const GAME_OVERRIDES: { [gameId: string]: { [playerCount: string]: string } } =
+  {
+    '8172': {
+      '7': 'Recommended',
+      '8': 'Recommended',
+      '9': 'Recommended',
+      '10': 'Recommended',
+    },
+  };
+
 function updateGames() {
   let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Games');
   if (sheet === null) {
@@ -121,11 +132,10 @@ function updateGames() {
               return acc;
             }, {});
           Logger.log(numbers);
-          if (id === 8172) {
-            numbers['7'] = 'Recommended';
-            numbers['8'] = 'Recommended';
-            numbers['9'] = 'Recommended';
-            numbers['10'] = 'Recommended';
+          // Apply game-specific overrides if they exist
+          const overrides = GAME_OVERRIDES[id];
+          if (overrides) {
+            numbers = { ...numbers, ...overrides };
           }
           const indexes = [...Array(10)].map((v, i) => i + $._I);
           indexes.forEach((index) => {
