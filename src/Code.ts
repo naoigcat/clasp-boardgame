@@ -175,8 +175,12 @@ function updateGames() {
             .toNumber();
           row[$._Z] = current;
           return row;
-        } catch (e) {
-          Logger.log(e);
+        } catch (e: unknown) {
+          const rowIdentifier = row[$._A].getText() || `row ${row[$.__]}`;
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          Logger.log(
+            `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`
+          );
           return row;
         }
       })
@@ -185,8 +189,9 @@ function updateGames() {
       })
       .map((row: any[]) => row.slice($._B));
     sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
-  } catch (e) {
-    Logger.log(e);
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    Logger.log(`Failed after processing ${count} rows: ${errorMessage}`);
   }
 }
 
