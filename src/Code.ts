@@ -108,9 +108,13 @@ function updateGames() {
           .findAttribute('name', 'suggested_numplayers')
           .getChildren('results')
           .reduce((acc: any, results: any) => {
-            acc[results.getAttribute('numplayers').getValue()] = results
+            let numvotes = results
               .getChildren('result')
-              .sortAttribute('numvotes')[0]
+              .sortAttribute('numvotes')[0];
+            if (numvotes === undefined) {
+              return acc;
+            }
+            acc[results.getAttribute('numplayers').getValue()] = numvotes
               .getAttribute('value')
               .getValue();
             return acc;
