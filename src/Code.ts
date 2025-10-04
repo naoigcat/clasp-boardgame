@@ -58,132 +58,136 @@ function updateGames() {
     });
   let current = new Date();
   let count = 0;
-  rows = rows
-    .slice(
-      0,
-      rows.findIndex((row: any[]) => row[$._A].getText().length === 0)
-    )
-    .sort((a: any[], b: any[]) => {
-      return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
-    })
-    .map((row: any[]) => {
-      // Clear columns containing values by ARRAYFORMULA
-      [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
-        row[index] = '';
-      });
-      // Reduces the number of API executions because there is a 6 minute timeout
-      if (count > 100) {
-        return row;
-      }
-      Logger.log(row[$._A].getText());
-      const url = row[$._A].getLinkUrl();
-      if (url === null) {
-        return row;
-      }
-      let updated = row[$._Z] as Date;
-      // Skip if you have been running the API within the past week
-      if (updated && updated.withDate(updated.getDate() + 7) > current) {
-        return row;
-      }
-      try {
-        const type = url.split('/')[3];
-        const id = url.split('/')[4];
-        const endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
-        Logger.log(endpoint);
-        const response = UrlFetchApp.fetch(endpoint);
-        Utilities.sleep(2000);
-        count++;
-        if (response.getResponseCode() !== 200) {
-          return row;
-        }
-        const body = response.getContentText();
-        const item = XmlService.parse(body).getRootElement().getChild('item');
-        if (item === null) {
-          Logger.log('item is null');
-          Logger.log(body);
-          return row;
-        }
-        let numbers = item
-          .getChildren('poll')
-          .findAttribute('name', 'suggested_numplayers')
-          .getChildren('results')
-          .reduce((acc: any, results: any) => {
-            let numvotes = results
-              .getChildren('result')
-              .sortAttribute('numvotes')[0];
-            if (numvotes === undefined) {
-              return acc;
-            }
-            acc[results.getAttribute('numplayers').getValue()] = numvotes
-              .getAttribute('value')
-              .getValue();
-            return acc;
-          }, {});
-        Logger.log(numbers);
-        if (id === 8172) {
-          numbers['7'] = 'Recommended';
-          numbers['8'] = 'Recommended';
-          numbers['9'] = 'Recommended';
-          numbers['10'] = 'Recommended';
-        }
-        const indexes = [...Array(10)].map((v, i) => i + $._I);
-        indexes.forEach((index) => {
-          row[index] = numbers[(index - $._G).toString()];
+  try {
+    rows = rows
+      .slice(
+        0,
+        rows.findIndex((row: any[]) => row[$._A].getText().length === 0)
+      )
+      .sort((a: any[], b: any[]) => {
+        return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
+      })
+      .map((row: any[]) => {
+        // Clear columns containing values by ARRAYFORMULA
+        [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
+          row[index] = '';
         });
-        row[$._R] = item
-          .getChild('statistics')
-          .getChild('ratings')
-          .getChild('ranks')
-          .getChildren('rank')
-          .findAttribute('name', 'boardgame')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        row[$._S] = item
-          .getChild('statistics')
-          .getChild('ratings')
-          .getChild('bayesaverage')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        row[$._T] = item
-          .getChild('statistics')
-          .getChild('ratings')
-          .getChild('averageweight')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        let minplaytime = item
-          .getChild('minplaytime')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        let maxplaytime = item
-          .getChild('maxplaytime')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        row[$._U] =
-          minplaytime === maxplaytime
-            ? minplaytime
-            : `${minplaytime}-${maxplaytime}`;
-        row[$._V] = item
-          .getChild('yearpublished')
-          .getAttribute('value')
-          .getValue()
-          .toNumber();
-        row[$._Z] = current;
-        return row;
-      } catch (e) {
-        Logger.log(e);
-        return row;
-      }
-    })
-    .sort((a: any[], b: any[]) => {
-      return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
-    })
-    .map((row: any[]) => row.slice($._B));
-  sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
+        // Reduces the number of API executions because there is a 6 minute timeout
+        if (count > 100) {
+          return row;
+        }
+        Logger.log(row[$._A].getText());
+        const url = row[$._A].getLinkUrl();
+        if (url === null) {
+          return row;
+        }
+        let updated = row[$._Z] as Date;
+        // Skip if you have been running the API within the past week
+        if (updated && updated.withDate(updated.getDate() + 7) > current) {
+          return row;
+        }
+        try {
+          const type = url.split('/')[3];
+          const id = url.split('/')[4];
+          const endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
+          Logger.log(endpoint);
+          const response = UrlFetchApp.fetch(endpoint);
+          Utilities.sleep(2000);
+          count++;
+          if (response.getResponseCode() !== 200) {
+            return row;
+          }
+          const body = response.getContentText();
+          const item = XmlService.parse(body).getRootElement().getChild('item');
+          if (item === null) {
+            Logger.log('item is null');
+            Logger.log(body);
+            return row;
+          }
+          let numbers = item
+            .getChildren('poll')
+            .findAttribute('name', 'suggested_numplayers')
+            .getChildren('results')
+            .reduce((acc: any, results: any) => {
+              let numvotes = results
+                .getChildren('result')
+                .sortAttribute('numvotes')[0];
+              if (numvotes === undefined) {
+                return acc;
+              }
+              acc[results.getAttribute('numplayers').getValue()] = numvotes
+                .getAttribute('value')
+                .getValue();
+              return acc;
+            }, {});
+          Logger.log(numbers);
+          if (id === 8172) {
+            numbers['7'] = 'Recommended';
+            numbers['8'] = 'Recommended';
+            numbers['9'] = 'Recommended';
+            numbers['10'] = 'Recommended';
+          }
+          const indexes = [...Array(10)].map((v, i) => i + $._I);
+          indexes.forEach((index) => {
+            row[index] = numbers[(index - $._G).toString()];
+          });
+          row[$._R] = item
+            .getChild('statistics')
+            .getChild('ratings')
+            .getChild('ranks')
+            .getChildren('rank')
+            .findAttribute('name', 'boardgame')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          row[$._S] = item
+            .getChild('statistics')
+            .getChild('ratings')
+            .getChild('bayesaverage')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          row[$._T] = item
+            .getChild('statistics')
+            .getChild('ratings')
+            .getChild('averageweight')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          let minplaytime = item
+            .getChild('minplaytime')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          let maxplaytime = item
+            .getChild('maxplaytime')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          row[$._U] =
+            minplaytime === maxplaytime
+              ? minplaytime
+              : `${minplaytime}-${maxplaytime}`;
+          row[$._V] = item
+            .getChild('yearpublished')
+            .getAttribute('value')
+            .getValue()
+            .toNumber();
+          row[$._Z] = current;
+          return row;
+        } catch (e) {
+          Logger.log(e);
+          return row;
+        }
+      })
+      .sort((a: any[], b: any[]) => {
+        return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
+      })
+      .map((row: any[]) => row.slice($._B));
+    sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
+  } catch (e) {
+    Logger.log(e);
+  }
 }
 
 function updateArenaRankings() {
