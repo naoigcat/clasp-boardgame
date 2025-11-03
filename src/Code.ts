@@ -38,6 +38,31 @@ const $ = {
   _Z: 26,
 } as const;
 
+function getToken(): string | null {
+  return PropertiesService.getScriptProperties().getProperty('TOKEN');
+}
+
+function fetch(
+  url: string,
+  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {}
+): GoogleAppsScript.URL_Fetch.HTTPResponse {
+  return UrlFetchApp.fetch(url, params);
+}
+
+function fetchWithAuth(
+  url: string,
+  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {}
+): GoogleAppsScript.URL_Fetch.HTTPResponse {
+  const token = getToken();
+  const headers: { [key: string]: string } = {
+    ...(params.headers as { [key: string]: string } | undefined),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return UrlFetchApp.fetch(url, { ...params, headers });
+}
+
 // Game-specific overrides for player count recommendations
 const GAME_OVERRIDES: { [gameId: string]: { [playerCount: string]: string } } =
   {
@@ -103,7 +128,7 @@ function updateGames() {
           const id = url.split('/')[4];
           const endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
           Logger.log(endpoint);
-          const response = UrlFetchApp.fetch(endpoint);
+          const response = fetchWithAuth(endpoint);
           Utilities.sleep(2000);
           count++;
           if (response.getResponseCode() !== 200) {
@@ -225,9 +250,7 @@ function updateArenaRankings() {
   if (rankings === null) {
     return;
   }
-  let html = UrlFetchApp.fetch(
-    'https://ja.boardgamearena.com'
-  ).getContentText();
+  let html = fetch('https://ja.boardgamearena.com').getContentText();
   let tagMatches =
     (html.match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m) || [])[1].match(
       /\{"id":[\s\S]*?\}/gm
@@ -354,7 +377,7 @@ function updateArenaTitles() {
         return row;
       }
       try {
-        title = (UrlFetchApp.fetch(url)
+        title = (fetch(url)
           .getContentText()
           .match(
             /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m
@@ -446,7 +469,7 @@ function updateRatings() {
   let page = 1;
   let ratings = [];
   while (true) {
-    let html = UrlFetchApp.fetch(base + page.toString()).getContentText();
+    let html = fetch(base + page.toString()).getContentText();
     let matches =
       html.match(
         new RegExp('<a class="list--interests-item-title".*?</a>', 'g')
