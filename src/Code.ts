@@ -94,6 +94,8 @@ function updateGames() {
     });
   let current = new Date();
   let count = 0;
+  const startTime = Date.now();
+  const timeLimitMs = 5 * 60 * 1000;
   let errors: string[] = [];
   try {
     rows = rows
@@ -109,8 +111,8 @@ function updateGames() {
         [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
           row[index] = '';
         });
-        // Reduces the number of API executions because there is a 6 minute timeout
-        if (count > 100) {
+        // Stop processing if the execution window has exceeded five minutes
+        if (Date.now() - startTime > timeLimitMs) {
           return row;
         }
         Logger.log(row[$._A].getText());
@@ -344,6 +346,8 @@ function updateArenaTitles() {
     return;
   }
   let count = 0;
+  const startTime = Date.now();
+  const timeLimitMs = 5 * 60 * 1000;
   let rows: any[][] = titles
     .getRange('$A$2:$C')
     .getValues()
@@ -372,8 +376,8 @@ function updateArenaTitles() {
       if (title) {
         return row;
       }
-      // Reduces the number of API executions because there is a 6 minute timeout
-      if (count > 100) {
+      // Stop processing if the execution window has exceeded five minutes
+      if (Date.now() - startTime > timeLimitMs) {
         return row;
       }
       try {
