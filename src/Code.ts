@@ -112,7 +112,14 @@ function updateGames() {
           row[index] = '';
         });
         // Stop processing if the execution window has exceeded five minutes
-        if (Date.now() - startTime > timeLimitMs) {
+        const elapsedMs = Date.now() - startTime;
+        if (elapsedMs > timeLimitMs) {
+          const identifier =
+            row[$._A] && typeof row[$._A].getText === 'function'
+              ? row[$._A].getText()
+              : `index ${row[$.__]}`;
+          const message = `updateGames stopped after ${elapsedMs}ms (limit ${timeLimitMs}ms) at ${identifier}`;
+          Logger.log(message);
           return row;
         }
         Logger.log(row[$._A].getText());
@@ -377,7 +384,11 @@ function updateArenaTitles() {
         return row;
       }
       // Stop processing if the execution window has exceeded five minutes
-      if (Date.now() - startTime > timeLimitMs) {
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs > timeLimitMs) {
+        const identifier = row[$._A] || `index ${row[$.__]}`;
+        const message = `updateArenaTitles stopped after ${elapsedMs}ms (limit ${timeLimitMs}ms) at ${identifier}`;
+        Logger.log(message);
         return row;
       }
       try {
