@@ -94,6 +94,7 @@ function updateGames() {
     });
   let current = new Date();
   let count = 0;
+  let timeLimitExceeded = false;
   const startTime = Date.now();
   const timeLimitMs = 5 * 60 * 1000;
   let errors: string[] = [];
@@ -107,13 +108,17 @@ function updateGames() {
         return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
       })
       .map((row: any[]) => {
-        // Clear columns containing values by ARRAYFORMULA
+        // Even when no processing occurs, clear the cells so ARRAYFORMULA can continue expanding values
         [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
           row[index] = '';
         });
         // Stop processing if the execution window has exceeded five minutes
+        if (timeLimitExceeded) {
+          return row;
+        }
         const elapsedMs = Date.now() - startTime;
         if (elapsedMs > timeLimitMs) {
+          timeLimitExceeded = true;
           const identifier =
             row[$._A] && typeof row[$._A].getText === 'function'
               ? row[$._A].getText()
@@ -353,6 +358,7 @@ function updateArenaTitles() {
     return;
   }
   let count = 0;
+  let timeLimitExceeded = false;
   const startTime = Date.now();
   const timeLimitMs = 5 * 60 * 1000;
   let rows: any[][] = titles
@@ -384,8 +390,12 @@ function updateArenaTitles() {
         return row;
       }
       // Stop processing if the execution window has exceeded five minutes
+      if (timeLimitExceeded) {
+        return row;
+      }
       const elapsedMs = Date.now() - startTime;
       if (elapsedMs > timeLimitMs) {
+        timeLimitExceeded = true;
         const identifier = row[$._A] || `index ${row[$.__]}`;
         const message = `updateArenaTitles stopped after ${elapsedMs}ms (limit ${timeLimitMs}ms) at ${identifier}`;
         Logger.log(message);
