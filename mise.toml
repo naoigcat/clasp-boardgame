@@ -1,0 +1,36 @@
+[tasks.build]
+description = "Rebuild Docker image"
+run = "docker compose build"
+
+[tasks.remove]
+description = "Stop containers and remove volumes"
+run = "docker compose down --volumes"
+
+[tasks.login]
+description = "Login to clasp"
+run = '''
+docker compose run --rm --entrypoint bash clasp -c $'clasp login &
+ read url
+ curl $url
+ wait'
+'''
+
+[tasks.clone]
+description = "Download a script by SCRIPT_ID"
+usage = 'arg "<script_id>" env="SCRIPT_ID" help="Script ID from the GAS URL"'
+run = "docker compose run --rm clasp clone ${usage_script_id?}"
+
+[tasks.pull]
+description = "Download the script"
+run = "docker compose run --rm clasp pull"
+
+[tasks.push]
+description = "Compile TypeScript and upload the script"
+run = [
+  "docker compose run --rm --entrypoint bash clasp -c 'npx tsc'",
+  "docker compose run --rm clasp push",
+]
+
+[tasks.install]
+description = "Install npm dependencies in the container"
+run = "docker compose run --rm --entrypoint bash clasp -c 'npm install'"

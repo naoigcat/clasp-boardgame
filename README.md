@@ -5,7 +5,7 @@
 Rebuild Docker image.
 
 ```sh
-make build
+mise run build
 ```
 
 ## Login
@@ -13,7 +13,7 @@ make build
 Login to clasp by accessing the URL output to the terminal, and pasting the authentication code to the terminal.
 
 ```sh
-make login
+mise run login
 ```
 
 ## Clone
@@ -21,7 +21,7 @@ make login
 Download the script with `{SCRIPT_ID}` that can be obtained by the URL and save it.
 
 ```sh
-make clone SCRIPT_ID={SCRIPT_ID}
+mise run clone {SCRIPT_ID}
 ```
 
 ## Push
@@ -29,7 +29,7 @@ make clone SCRIPT_ID={SCRIPT_ID}
 Upload the script.
 
 ```sh
-make push
+mise run push
 ```
 
 ## Pull
@@ -37,5 +37,5 @@ make push
 Download the script.
 
 ```sh
-make pull
+mise run pull
 ```
