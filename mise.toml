@@ -30,3 +30,7 @@ run = [
   "docker compose run --rm --entrypoint bash clasp -c 'npx tsc'",
   "docker compose run --rm clasp push",
 ]
+
+[tasks.format]
+description = "Format code with Prettier"
+run = "docker compose run --rm --entrypoint bash clasp -c 'prettier --write .'"
