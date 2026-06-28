@@ -1,4 +1,4 @@
-# GAS BoardGameGeek
+# Board Game
 
 Google Apps Script that adds a custom menu to a Google Spreadsheet for fetching BoardGameGeek game data and updating related sheets (Arena Rankings, Arena Titles, Ratings).
 
