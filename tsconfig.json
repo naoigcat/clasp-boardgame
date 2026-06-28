@@ -3,6 +3,7 @@
     "target": "ES5",
     "module": "none",
     "lib": ["ES2020"],
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": false,
     "forceConsistentCasingInFileNames": true,
