@@ -1,3 +1,2 @@
 node_modules/
-Code.js
-Properties.js
+src/**/*.js
