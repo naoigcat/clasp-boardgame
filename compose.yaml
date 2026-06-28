@@ -9,6 +9,7 @@ services:
             npm i -g \
               @google/clasp@3.3.0 \
               @types/google-apps-script@^1.0.81 \
+              prettier@3.9.1 \
               typescript@5.8.3
         WORKDIR /app
         ENTRYPOINT [ "clasp" ]
