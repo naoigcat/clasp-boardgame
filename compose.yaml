@@ -6,12 +6,18 @@ services:
         RUN apt-get update && \
             apt-get install -y curl && \
             npm -v && \
-            npm i -g @google/clasp
+            npm i -g \
+              @google/clasp@3.3.0 \
+              @types/google-apps-script@^1.0.81 \
+              typescript@5.8.3
         WORKDIR /app
         ENTRYPOINT [ "clasp" ]
     volumes:
       - login:/root
       - $PWD:/app
+      - node_modules:/app/node_modules
 volumes:
   login:
+    driver: local
+  node_modules:
     driver: local

@@ -30,7 +30,3 @@ run = [
   "docker compose run --rm --entrypoint bash clasp -c 'npx tsc'",
   "docker compose run --rm clasp push",
 ]
-
-[tasks.install]
-description = "Install npm dependencies in the container"
-run = "docker compose run --rm --entrypoint bash clasp -c 'npm install'"
