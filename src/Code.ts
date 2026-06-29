@@ -99,11 +99,12 @@ function updateGames() {
   const timeLimitMs = 5 * 60 * 1000;
   let errors: string[] = [];
   try {
+    const emptyIndex = rows.findIndex(
+      (row: any[]) => row[$._A].getText().length === 0
+    );
+    const end = emptyIndex === -1 ? rows.length : emptyIndex;
     rows = rows
-      .slice(
-        0,
-        rows.findIndex((row: any[]) => row[$._A].getText().length === 0)
-      )
+      .slice(0, end)
       .sort((a: any[], b: any[]) => {
         return a[$._Z] < b[$._Z] ? -1 : a[$._Z] > b[$._Z] ? 1 : 0;
       })
@@ -241,6 +242,9 @@ function updateGames() {
         return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
       })
       .map((row: any[]) => row.slice($._B));
+    if (rows.length === 0) {
+      return;
+    }
     sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
@@ -339,6 +343,9 @@ function updateArenaRankings() {
       game['player_numbers'].includes(9),
       game['player_numbers'].includes(10),
     ]);
+  }
+  if (games.length === 0) {
+    return;
   }
   rankings
     .getRange(2, 1, rankings.getLastRow() - 1, games[0].length)
@@ -482,6 +489,9 @@ function updateArenaTitles() {
       return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
     })
     .map((row: any[]) => row.slice($._A));
+  if (rows.length === 0) {
+    return;
+  }
   titles.getRange(2, $._A, rows.length, rows[0].length).setValues(rows);
 }
 
@@ -503,18 +513,23 @@ function updateRatings() {
       break;
     }
     for (let index = 0; index < matches.length; index++) {
-      let title = ((matches[index] || '').match(
+      let titleMatch = (matches[index] || '').match(
         '<div class="list--interests-item-title-japanese">(.*?)</div>'
-      ) || [])[1]
+      );
+      if (!titleMatch?.[1]) {
+        continue;
+      }
+      let title = titleMatch[1]
         .split('/')[0]
         .replace(new RegExp('（.*）'), '')
         .replace('：新版', '')
         .replace('（拡張）', '')
         .replace('&amp;', '＆')
         .trim();
-      let rating = ((matches[index] || '').match(
+      let ratingMatch = (matches[index] || '').match(
         '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
-      ) || [])[1];
+      );
+      let rating = ratingMatch?.[1];
       switch (title) {
         case '#hashtag':
           ratings.push(['ハッシュタグ', rating]);
