@@ -42,6 +42,10 @@ function getToken(): string | null {
   return PropertiesService.getScriptProperties().getProperty('TOKEN');
 }
 
+function getBodogeUserId(): string | null {
+  return PropertiesService.getScriptProperties().getProperty('BODOGE_USER_ID');
+}
+
 function fetch(
   url: string,
   params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {}
@@ -500,7 +504,11 @@ function updateRatings() {
   if (sheet === null) {
     return;
   }
-  let base = 'https://bodoge.hoobby.net/friends/16159/boardgames/played?page=';
+  const bodogeUserId = getBodogeUserId();
+  if (!bodogeUserId) {
+    return;
+  }
+  let base = `https://bodoge.hoobby.net/friends/${bodogeUserId}/boardgames/played?page=`;
   let page = 1;
   let ratings = [];
   while (true) {
