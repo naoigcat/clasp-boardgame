@@ -1,0 +1,12 @@
+# ignore all files
+**/**
+
+# except manifest and compiled scripts
+!appsscript.json
+!**/*.js
+!**/*.gs
+!**/*.html
+
+# ignore dev directories
+.git/**
+node_modules/**
