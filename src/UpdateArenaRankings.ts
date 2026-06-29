@@ -8,7 +8,7 @@ class UpdateArenaRankings {
     let html = fetch('https://ja.boardgamearena.com').getContentText();
     let tagMatches =
       (html.match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m) || [])[1].match(
-        /\{"id":[\s\S]*?\}/gm
+        /\{"id":[\s\S]*?\}/gm,
       ) || [];
     let tagMaster: { [key: string]: string } = {};
     for (let index = 0; index < tagMatches.length; index++) {
@@ -27,7 +27,7 @@ class UpdateArenaRankings {
     }
     let gameMatches =
       (html.match(/"game_list":([\s\S]*),\n?\s*"game_tags"/m) || [])[1].match(
-        /\{"id":[\s\S]*?"watched":[\s\S]*?\}/gm
+        /\{"id":[\s\S]*?"watched":[\s\S]*?\}/gm,
       ) || [];
     let games = [];
     for (let index = 0; index < gameMatches.length; index++) {

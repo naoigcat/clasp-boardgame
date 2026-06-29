@@ -8,14 +8,14 @@ function getBodogeUserId(): string | null {
 
 function fetch(
   url: string,
-  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {}
+  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
 ): GoogleAppsScript.URL_Fetch.HTTPResponse {
   return UrlFetchApp.fetch(url, params);
 }
 
 function fetchWithAuth(
   url: string,
-  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {}
+  params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
 ): GoogleAppsScript.URL_Fetch.HTTPResponse {
   const token = getToken();
   const headers: { [key: string]: string } = {

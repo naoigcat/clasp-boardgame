@@ -1,4 +1,8 @@
 class UpdateGames {
+  private static readonly HANDLER = 'updateGames';
+  private static readonly BATCH_SIZE = 50;
+  private static readonly TRIGGER_INTERVAL_MINUTES = 5;
+
   private static readonly GAME_OVERRIDES: {
     [gameId: string]: { [playerCount: string]: string };
   } = {
@@ -9,6 +13,27 @@ class UpdateGames {
       '10': 'Recommended',
     },
   };
+
+  private static countPendingRows(rows: any[][], current: Date): number {
+    const emptyIndex = rows.findIndex(
+      (row: any[]) => row[$._A].getText().length === 0,
+    );
+    const end = emptyIndex === -1 ? rows.length : emptyIndex;
+    let count = 0;
+    for (let index = 0; index < end; index++) {
+      const row = rows[index];
+      const url = row[$._A].getLinkUrl();
+      if (url === null) {
+        continue;
+      }
+      const updated = row[$._Z] as Date;
+      if (updated && updated.addDays(7) > current) {
+        continue;
+      }
+      count++;
+    }
+    return count;
+  }
 
   static run(): void {
     let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Games');
@@ -29,14 +54,18 @@ class UpdateGames {
         rows[index] = rows[index].concat(row);
       });
     let current = new Date();
+    const pendingCount = UpdateGames.countPendingRows(rows, current);
+    if (pendingCount === 0) {
+      Triggers.deleteAll(UpdateGames.HANDLER);
+      return;
+    }
+    let processedCount = 0;
     let count = 0;
-    let timeLimitExceeded = false;
-    const startTime = Date.now();
-    const timeLimitMs = 5 * 60 * 1000;
     let errors: string[] = [];
+    let remainingCount = 0;
     try {
       const emptyIndex = rows.findIndex(
-        (row: any[]) => row[$._A].getText().length === 0
+        (row: any[]) => row[$._A].getText().length === 0,
       );
       const end = emptyIndex === -1 ? rows.length : emptyIndex;
       rows = rows
@@ -49,21 +78,6 @@ class UpdateGames {
           [$._C, $._F, $._W, $._X, $._Y].forEach((index) => {
             row[index] = '';
           });
-          // Stop processing if the execution window has exceeded five minutes
-          if (timeLimitExceeded) {
-            return row;
-          }
-          const elapsedMs = Date.now() - startTime;
-          if (elapsedMs > timeLimitMs) {
-            timeLimitExceeded = true;
-            const identifier =
-              row[$._A] && typeof row[$._A].getText === 'function'
-                ? row[$._A].getText()
-                : `index ${row[$.__]}`;
-            const message = `updateGames stopped after ${elapsedMs}ms (limit ${timeLimitMs}ms) at ${identifier}`;
-            Logger.log(message);
-            return row;
-          }
           Logger.log(row[$._A].getText());
           const url = row[$._A].getLinkUrl();
           if (url === null) {
@@ -74,6 +88,10 @@ class UpdateGames {
           if (updated && updated.addDays(7) > current) {
             return row;
           }
+          if (processedCount >= UpdateGames.BATCH_SIZE) {
+            return row;
+          }
+          processedCount++;
           try {
             const type = url.split('/')[3];
             const id = url.split('/')[4];
@@ -86,7 +104,9 @@ class UpdateGames {
               return row;
             }
             const body = response.getContentText();
-            const item = XmlService.parse(body).getRootElement().getChild('item');
+            const item = XmlService.parse(body)
+              .getRootElement()
+              .getChild('item');
             if (item === null) {
               Logger.log('item is null');
               Logger.log(body);
@@ -166,18 +186,19 @@ class UpdateGames {
             const rowIdentifier = row[$._A].getText() || `row ${row[$.__]}`;
             const errorMessage = e instanceof Error ? e.message : String(e);
             Logger.log(
-              `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`
+              `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`,
             );
             errors.push(
-              `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`
+              `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`,
             );
             return row;
           }
         })
         .sort((a: any[], b: any[]) => {
           return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
-        })
-        .map((row: any[]) => row.slice($._B));
+        });
+      remainingCount = UpdateGames.countPendingRows(rows, current);
+      rows = rows.map((row: any[]) => row.slice($._B));
       if (rows.length === 0) {
         return;
       }
@@ -195,6 +216,14 @@ class UpdateGames {
     }
     if (errors.length > 0) {
       throw new Error(errors.join('\n'));
+    }
+    if (remainingCount > 0) {
+      Triggers.ensure(
+        UpdateGames.HANDLER,
+        UpdateGames.TRIGGER_INTERVAL_MINUTES,
+      );
+    } else {
+      Triggers.deleteAll(UpdateGames.HANDLER);
     }
   }
 }
