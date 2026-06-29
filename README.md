@@ -14,7 +14,6 @@ Developed with TypeScript and [clasp](https://github.com/google/clasp), running 
 First-time setup from a fresh clone:
 
 ```sh
-mise run install   # Install npm dependencies in the container
 mise run build     # Build the Docker image
 mise run login     # Authenticate clasp (see Login below)
 ```
@@ -40,14 +39,6 @@ Some features call the [BoardGameGeek XML API](https://boardgamegeek.com/using_t
 3. Add a property named `TOKEN` with your BoardGameGeek application token as the value.
 
 Without `TOKEN`, unauthenticated requests may be rate-limited or fail.
-
-## Install
-
-Install npm dependencies in the container (TypeScript and type definitions).
-
-```sh
-mise run install
-```
 
 ## Build
 
