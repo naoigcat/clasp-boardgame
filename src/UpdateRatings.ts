@@ -15,14 +15,14 @@ class UpdateRatings {
       let html = fetch(base + page.toString()).getContentText();
       let matches =
         html.match(
-          new RegExp('<a class="list--interests-item-title".*?</a>', 'g')
+          new RegExp('<a class="list--interests-item-title".*?</a>', 'g'),
         ) || [];
       if (matches.length === 0) {
         break;
       }
       for (let index = 0; index < matches.length; index++) {
         let titleMatch = (matches[index] || '').match(
-          '<div class="list--interests-item-title-japanese">(.*?)</div>'
+          '<div class="list--interests-item-title-japanese">(.*?)</div>',
         );
         if (!titleMatch?.[1]) {
           continue;
@@ -35,7 +35,7 @@ class UpdateRatings {
           .replace('&amp;', '＆')
           .trim();
         let ratingMatch = (matches[index] || '').match(
-          '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">'
+          '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">',
         );
         let rating = ratingMatch?.[1];
         switch (title) {
