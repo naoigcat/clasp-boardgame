@@ -53,6 +53,12 @@ class UpdateGames {
       .forEach((row: any[], index: number) => {
         rows[index] = rows[index].concat(row);
       });
+    sheet
+      .getRange('$AA$2:$AA')
+      .getValues()
+      .forEach((row: any[], index: number) => {
+        rows[index] = rows[index].concat(row);
+      });
     let current = new Date();
     const pendingCount = UpdateGames.countPendingRows(rows, current);
     if (pendingCount === 0) {
@@ -61,7 +67,6 @@ class UpdateGames {
     }
     let processedCount = 0;
     let count = 0;
-    let errors: string[] = [];
     let remainingCount = 0;
     try {
       const emptyIndex = rows.findIndex(
@@ -101,6 +106,7 @@ class UpdateGames {
             Utilities.sleep(2000);
             count++;
             if (response.getResponseCode() !== 200) {
+              row[$._AA] = `HTTP ${response.getResponseCode()}`;
               return row;
             }
             const body = response.getContentText();
@@ -110,6 +116,7 @@ class UpdateGames {
             if (item === null) {
               Logger.log('item is null');
               Logger.log(body);
+              row[$._AA] = 'item is null';
               return row;
             }
             let numbers = item
@@ -181,6 +188,7 @@ class UpdateGames {
               .getValue()
               .toNumber();
             row[$._Z] = current;
+            row[$._AA] = '';
             return row;
           } catch (e: unknown) {
             const rowIdentifier = row[$._A].getText() || `row ${row[$.__]}`;
@@ -188,9 +196,7 @@ class UpdateGames {
             Logger.log(
               `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`,
             );
-            errors.push(
-              `Error processing ${rowIdentifier} (URL: ${url}): ${errorMessage}`,
-            );
+            row[$._AA] = errorMessage;
             return row;
           }
         })
@@ -206,16 +212,7 @@ class UpdateGames {
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       Logger.log(`Failed after processing ${count} rows: ${errorMessage}`);
-      // Combine outer error with collected row-specific errors if any exist
-      if (errors.length > 0) {
-        errors.push(`Failed after processing ${count} rows: ${errorMessage}`);
-        throw new Error(errors.join('\n'));
-      } else {
-        throw e;
-      }
-    }
-    if (errors.length > 0) {
-      throw new Error(errors.join('\n'));
+      throw e;
     }
     if (remainingCount > 0) {
       Triggers.ensure(
