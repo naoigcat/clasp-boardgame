@@ -74,7 +74,7 @@ class UpdateTitles {
       return;
     }
     let rows: any[][] = titles
-      .getRange('$A$2:$C')
+      .getRange('$A$2:$D')
       .getValues()
       .filter((row: any[]) => row[$._A - 1]);
     rows = rows.concat(
@@ -87,7 +87,7 @@ class UpdateTitles {
             .includes(ranking[$._A - 1]);
         })
         .map((ranking: any[]) => {
-          return [ranking[0], '', ''];
+          return [ranking[0], '', '', ''];
         }),
     );
     rows = rows.map((row: any[], index: number) => {
@@ -111,26 +111,29 @@ class UpdateTitles {
         }
         processedCount++;
         let url = row[$._A];
-        if (!row[$._B]) {
-          try {
+        try {
+          if (!row[$._B]) {
             row[$._B] = (fetch(url)
               .getContentText()
               .match(
                 /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m,
               ) || [])[1];
-          } catch (e: unknown) {
-            if (e instanceof Error) {
-              Logger.log(`Error: ${e.message}\n${url}`);
-            } else {
-              Logger.log(`Unknown error: ${String(e)}\n${url}`);
-            }
-            return row;
-          } finally {
-            Utilities.sleep(1000);
-            count++;
           }
+          if (!row[$._B]) {
+            row[$._D] = 'game name not found';
+            return row;
+          }
+          row[$._C] = UpdateTitles.normalizeTitle(row[$._B].toString());
+          row[$._D] = '';
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          Logger.log(`Error: ${errorMessage}\n${url}`);
+          row[$._D] = errorMessage;
+          return row;
+        } finally {
+          Utilities.sleep(1000);
+          count++;
         }
-        row[$._C] = UpdateTitles.normalizeTitle(row[$._B].toString());
         return row;
       })
       .sort((a: any[], b: any[]) => {
