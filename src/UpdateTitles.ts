@@ -113,7 +113,7 @@ class UpdateTitles {
         let url = row[$._A];
         try {
           if (!row[$._B]) {
-            row[$._B] = (fetch(url)
+            row[$._B] = (urlFetch(url)
               .getContentText()
               .match(
                 /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m,

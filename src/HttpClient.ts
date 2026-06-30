@@ -6,14 +6,14 @@ function getBodogeUserId(): string | null {
   return PropertiesService.getScriptProperties().getProperty('BODOGE_USER_ID');
 }
 
-function fetch(
+function urlFetch(
   url: string,
   params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
 ): GoogleAppsScript.URL_Fetch.HTTPResponse {
   return UrlFetchApp.fetch(url, params);
 }
 
-function fetchWithAuth(
+function urlFetchWithAuth(
   url: string,
   params: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
 ): GoogleAppsScript.URL_Fetch.HTTPResponse {

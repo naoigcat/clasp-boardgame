@@ -5,7 +5,7 @@ class UpdateRankings {
     if (rankings === null) {
       return;
     }
-    let html = fetch('https://ja.boardgamearena.com').getContentText();
+    let html = urlFetch('https://ja.boardgamearena.com').getContentText();
     let tagMatches =
       (html.match(/"game_tags":([\s\S]*),\n?\s*"top_tags"/m) || [])[1].match(
         /\{"id":[\s\S]*?\}/gm,

@@ -12,7 +12,7 @@ class UpdateRatings {
     let page = 1;
     let ratings: any[][] = [];
     while (true) {
-      let html = fetch(base + page.toString()).getContentText();
+      let html = urlFetch(base + page.toString()).getContentText();
       let matches =
         html.match(
           new RegExp('<a class="list--interests-item-title".*?</a>', 'g'),
