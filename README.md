@@ -1,6 +1,6 @@
 # Board Game
 
-Google Apps Script that adds a custom menu to a Google Spreadsheet for fetching BoardGameGeek game data and updating related sheets (Arena Rankings, Arena Titles, Ratings).
+Google Apps Script that adds a custom menu to a Google Spreadsheet for fetching BoardGameGeek game data and updating related sheets (Rankings, Titles, Ratings).
 
 Developed with TypeScript and [clasp](https://github.com/google/clasp), running inside Docker via [mise](https://mise.jdx.dev/) tasks.
 

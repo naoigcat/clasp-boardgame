@@ -1,5 +1,5 @@
-class UpdateArenaTitles {
-  private static readonly HANDLER = 'updateArenaTitles';
+class UpdateTitles {
+  private static readonly HANDLER = 'updateTitles';
   private static readonly BATCH_SIZE = 100;
   private static readonly TRIGGER_INTERVAL_MINUTES = 5;
 
@@ -64,12 +64,12 @@ class UpdateArenaTitles {
 
   static run(): void {
     let rankings =
-      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Rankings');
+      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Rankings');
     if (rankings === null) {
       return;
     }
     let titles =
-      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Titles');
+      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Titles');
     if (titles === null) {
       return;
     }
@@ -94,9 +94,9 @@ class UpdateArenaTitles {
       row.unshift(index);
       return row;
     });
-    const pendingCount = UpdateArenaTitles.countPendingRows(rows);
+    const pendingCount = UpdateTitles.countPendingRows(rows);
     if (pendingCount === 0) {
-      Triggers.deleteAll(UpdateArenaTitles.HANDLER);
+      Triggers.deleteAll(UpdateTitles.HANDLER);
       return;
     }
     let processedCount = 0;
@@ -106,7 +106,7 @@ class UpdateArenaTitles {
         if (row[$._C]) {
           return row;
         }
-        if (processedCount >= UpdateArenaTitles.BATCH_SIZE) {
+        if (processedCount >= UpdateTitles.BATCH_SIZE) {
           return row;
         }
         processedCount++;
@@ -130,13 +130,13 @@ class UpdateArenaTitles {
             count++;
           }
         }
-        row[$._C] = UpdateArenaTitles.normalizeTitle(row[$._B].toString());
+        row[$._C] = UpdateTitles.normalizeTitle(row[$._B].toString());
         return row;
       })
       .sort((a: any[], b: any[]) => {
         return a[$.__] < b[$.__] ? -1 : a[$.__] > b[$.__] ? 1 : 0;
       });
-    const remainingCount = UpdateArenaTitles.countPendingRows(rows);
+    const remainingCount = UpdateTitles.countPendingRows(rows);
     rows = rows.map((row: any[]) => row.slice($._A));
     if (rows.length === 0) {
       return;
@@ -144,15 +144,15 @@ class UpdateArenaTitles {
     titles.getRange(2, $._A, rows.length, rows[0].length).setValues(rows);
     if (remainingCount > 0) {
       Triggers.ensure(
-        UpdateArenaTitles.HANDLER,
-        UpdateArenaTitles.TRIGGER_INTERVAL_MINUTES,
+        UpdateTitles.HANDLER,
+        UpdateTitles.TRIGGER_INTERVAL_MINUTES,
       );
     } else {
-      Triggers.deleteAll(UpdateArenaTitles.HANDLER);
+      Triggers.deleteAll(UpdateTitles.HANDLER);
     }
   }
 }
 
-function updateArenaTitles(): void {
-  UpdateArenaTitles.run();
+function updateTitles(): void {
+  UpdateTitles.run();
 }

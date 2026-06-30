@@ -1,7 +1,7 @@
-class UpdateArenaRankings {
+class UpdateRankings {
   static run(): void {
     let rankings =
-      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arena Rankings');
+      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Rankings');
     if (rankings === null) {
       return;
     }
@@ -91,6 +91,6 @@ class UpdateArenaRankings {
   }
 }
 
-function updateArenaRankings(): void {
-  UpdateArenaRankings.run();
+function updateRankings(): void {
+  UpdateRankings.run();
 }
