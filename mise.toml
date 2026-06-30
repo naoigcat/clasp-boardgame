@@ -27,7 +27,7 @@ run = "docker compose run --rm clasp pull"
 [tasks.push]
 description = "Compile TypeScript and upload the script"
 run = [
-  "docker compose run --rm --entrypoint bash clasp -c 'npx tsc'",
+  "docker compose run --rm --entrypoint bash clasp -c \"find src -name '*.js' -delete && npx tsc\"",
   "docker compose run --rm clasp push",
 ]
 
