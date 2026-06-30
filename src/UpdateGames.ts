@@ -27,7 +27,7 @@ class UpdateGames {
         continue;
       }
       const updated = row[$._Z] as Date;
-      if (updated && updated.addDays(7) > current) {
+      if (updated && addDays(updated, 7) > current) {
         continue;
       }
       count++;
@@ -90,7 +90,7 @@ class UpdateGames {
           }
           let updated = row[$._Z] as Date;
           // Skip if you have been running the API within the past week
-          if (updated && updated.addDays(7) > current) {
+          if (updated && addDays(updated, 7) > current) {
             return row;
           }
           if (processedCount >= UpdateGames.BATCH_SIZE) {
@@ -119,14 +119,17 @@ class UpdateGames {
               row[$._AA] = 'item is null';
               return row;
             }
-            let numbers = item
-              .getChildren('poll')
-              .findAttribute('name', 'suggested_numplayers')
+            let numbers = findAttribute(
+              item.getChildren('poll'),
+              'name',
+              'suggested_numplayers',
+            )
               .getChildren('results')
               .reduce((acc: any, results: any) => {
-                let numvotes = results
-                  .getChildren('result')
-                  .sortAttribute('numvotes')[0];
+                let numvotes = sortAttribute(
+                  results.getChildren('result'),
+                  'numvotes',
+                )[0];
                 if (numvotes === undefined) {
                   return acc;
                 }
@@ -145,48 +148,57 @@ class UpdateGames {
             indexes.forEach((index) => {
               row[index] = numbers[(index - $._G).toString()];
             });
-            row[$._R] = item
-              .getChild('statistics')
-              .getChild('ratings')
-              .getChild('ranks')
-              .getChildren('rank')
-              .findAttribute('name', 'boardgame')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
-            row[$._S] = item
-              .getChild('statistics')
-              .getChild('ratings')
-              .getChild('bayesaverage')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
-            row[$._T] = item
-              .getChild('statistics')
-              .getChild('ratings')
-              .getChild('averageweight')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
-            let minplaytime = item
-              .getChild('minplaytime')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
-            let maxplaytime = item
-              .getChild('maxplaytime')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
+            row[$._R] = toNumber(
+              findAttribute(
+                item
+                  .getChild('statistics')
+                  .getChild('ratings')
+                  .getChild('ranks')
+                  .getChildren('rank'),
+                'name',
+                'boardgame',
+              )
+                .getAttribute('value')
+                .getValue(),
+            );
+            row[$._S] = toNumber(
+              item
+                .getChild('statistics')
+                .getChild('ratings')
+                .getChild('bayesaverage')
+                .getAttribute('value')
+                .getValue(),
+            );
+            row[$._T] = toNumber(
+              item
+                .getChild('statistics')
+                .getChild('ratings')
+                .getChild('averageweight')
+                .getAttribute('value')
+                .getValue(),
+            );
+            let minplaytime = toNumber(
+              item
+                .getChild('minplaytime')
+                .getAttribute('value')
+                .getValue(),
+            );
+            let maxplaytime = toNumber(
+              item
+                .getChild('maxplaytime')
+                .getAttribute('value')
+                .getValue(),
+            );
             row[$._U] =
               minplaytime === maxplaytime
                 ? minplaytime
                 : `${minplaytime}-${maxplaytime}`;
-            row[$._V] = item
-              .getChild('yearpublished')
-              .getAttribute('value')
-              .getValue()
-              .toNumber();
+            row[$._V] = toNumber(
+              item
+                .getChild('yearpublished')
+                .getAttribute('value')
+                .getValue(),
+            );
             row[$._Z] = current;
             row[$._AA] = '';
             return row;
