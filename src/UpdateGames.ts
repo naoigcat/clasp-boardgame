@@ -102,7 +102,7 @@ class UpdateGames {
             const id = url.split('/')[4];
             const endpoint = `https://boardgamegeek.com/xmlapi2/thing?type=${type}&stats=1&id=${id}`;
             Logger.log(endpoint);
-            const response = fetchWithAuth(endpoint);
+            const response = urlFetchWithAuth(endpoint);
             Utilities.sleep(2000);
             count++;
             if (response.getResponseCode() !== 200) {
