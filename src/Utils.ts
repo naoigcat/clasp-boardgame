@@ -3,9 +3,13 @@ function findAttribute(
   name: string,
   value: string,
 ): any {
-  return elements.find((element: any) => {
+  const element = elements.find((element: any) => {
     return element.getAttribute(name).getValue() === value;
   });
+  if (element === undefined) {
+    throw new Error(`Element with ${name}="${value}" not found`);
+  }
+  return element;
 }
 
 function sortAttribute(elements: any[], name: string): any[] {
