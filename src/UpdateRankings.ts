@@ -84,9 +84,10 @@ class UpdateRankings {
     if (games.length === 0) {
       return;
     }
-    rankings
-      .getRange(2, 1, rankings.getLastRow() - 1, games[0].length)
-      .clearContent();
+    const lastRow = rankings.getLastRow();
+    if (lastRow > 1) {
+      rankings.getRange(2, 1, lastRow - 1, games[0].length).clearContent();
+    }
     rankings.getRange(2, 1, games.length, games[0].length).setValues(games);
   }
 }
