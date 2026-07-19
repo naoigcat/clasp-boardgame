@@ -91,7 +91,3 @@ class UpdateRankings {
     rankings.getRange(2, 1, games.length, games[0].length).setValues(games);
   }
 }
-
-function updateRankings(): void {
-  UpdateRankings.run();
-}

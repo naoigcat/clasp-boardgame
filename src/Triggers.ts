@@ -1,9 +1,10 @@
 class Triggers {
   static ensure(handlerFunction: string, intervalMinutes: number): void {
-    const exists = ScriptApp.getProjectTriggers().some(
+    const triggers = ScriptApp.getProjectTriggers().filter(
       (trigger) => trigger.getHandlerFunction() === handlerFunction,
     );
-    if (!exists) {
+    triggers.slice(1).forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+    if (triggers.length === 0) {
       ScriptApp.newTrigger(handlerFunction)
         .timeBased()
         .everyMinutes(intervalMinutes)

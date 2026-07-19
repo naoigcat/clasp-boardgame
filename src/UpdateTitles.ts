@@ -1,7 +1,5 @@
 class UpdateTitles {
-  private static readonly HANDLER = 'updateTitles';
   private static readonly BATCH_SIZE = 100;
-  private static readonly TRIGGER_INTERVAL_MINUTES = 5;
 
   private static countPendingRows(rows: any[][]): number {
     return rows.filter((row: any[]) => row[$._A] && !row[$._C]).length;
@@ -63,16 +61,16 @@ class UpdateTitles {
     return title;
   }
 
-  static run(): void {
+  static run(): boolean {
     let rankings =
       SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Rankings');
     if (rankings === null) {
-      return;
+      return false;
     }
     let titles =
       SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Titles');
     if (titles === null) {
-      return;
+      return false;
     }
     let rows: any[][] = titles
       .getRange('$A$2:$D')
@@ -97,8 +95,7 @@ class UpdateTitles {
     });
     const pendingCount = UpdateTitles.countPendingRows(rows);
     if (pendingCount === 0) {
-      Triggers.deleteAll(UpdateTitles.HANDLER);
-      return;
+      return false;
     }
     let processedCount = 0;
     let count = 0;
@@ -143,20 +140,9 @@ class UpdateTitles {
     const remainingCount = UpdateTitles.countPendingRows(rows);
     rows = rows.map((row: any[]) => row.slice($._A));
     if (rows.length === 0) {
-      return;
+      return false;
     }
     titles.getRange(2, $._A, rows.length, rows[0].length).setValues(rows);
-    if (remainingCount > 0) {
-      Triggers.ensure(
-        UpdateTitles.HANDLER,
-        UpdateTitles.TRIGGER_INTERVAL_MINUTES,
-      );
-    } else {
-      Triggers.deleteAll(UpdateTitles.HANDLER);
-    }
+    return remainingCount > 0;
   }
-}
-
-function updateTitles(): void {
-  UpdateTitles.run();
 }

@@ -70,7 +70,3 @@ class UpdateRatings {
     sheet.getRange(2, 1, ratings.length, 2).setValues(ratings);
   }
 }
-
-function updateRatings(): void {
-  UpdateRatings.run();
-}
