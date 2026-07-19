@@ -129,6 +129,7 @@ module.exports = {
   createSandbox,
   createSheet,
   getCalls,
+  loadScripts,
   loadRankings,
   rankingPage,
 };

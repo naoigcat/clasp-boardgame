@@ -1,7 +1,5 @@
 class UpdateGames {
-  private static readonly HANDLER = 'updateGames';
   private static readonly BATCH_SIZE = 50;
-  private static readonly TRIGGER_INTERVAL_MINUTES = 5;
 
   private static readonly GAME_OVERRIDES: {
     [gameId: string]: { [playerCount: string]: string };
@@ -35,10 +33,10 @@ class UpdateGames {
     return count;
   }
 
-  static run(): void {
+  static run(): boolean {
     let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Games');
     if (sheet === null) {
-      return;
+      return false;
     }
     let rows: any[][] = sheet
       .getRange('$A$2:$A')
@@ -62,8 +60,7 @@ class UpdateGames {
     let current = new Date();
     const pendingCount = UpdateGames.countPendingRows(rows, current);
     if (pendingCount === 0) {
-      Triggers.deleteAll(UpdateGames.HANDLER);
-      return;
+      return false;
     }
     let processedCount = 0;
     let count = 0;
@@ -218,7 +215,7 @@ class UpdateGames {
       remainingCount = UpdateGames.countPendingRows(rows, current);
       rows = rows.map((row: any[]) => row.slice($._B));
       if (rows.length === 0) {
-        return;
+        return false;
       }
       sheet.getRange(2, $._B, rows.length, rows[0].length).setValues(rows);
     } catch (e: unknown) {
@@ -226,17 +223,6 @@ class UpdateGames {
       Logger.log(`Failed after processing ${count} rows: ${errorMessage}`);
       throw e;
     }
-    if (remainingCount > 0) {
-      Triggers.ensure(
-        UpdateGames.HANDLER,
-        UpdateGames.TRIGGER_INTERVAL_MINUTES,
-      );
-    } else {
-      Triggers.deleteAll(UpdateGames.HANDLER);
-    }
+    return remainingCount > 0;
   }
-}
-
-function updateGames(): void {
-  UpdateGames.run();
 }
