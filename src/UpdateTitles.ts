@@ -17,6 +17,7 @@ class UpdateTitles {
     title = title.replace(/ - /g, ' － ');
     title = title.replace(/《?新版》?/g, '');
     title = title.replace(/第\d+版/g, '');
+    title = title.replace(/\(.*?パック\)/, '')
     title = title.replace(/\s*･\s*/g, '・');
     title = title.replace(/\s*:\s*/g, '：');
     title = title.replace(/^\s+|\s+$/g, '');
