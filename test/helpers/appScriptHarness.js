@@ -4,13 +4,18 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+/**
+ * Transpiles one non-module Apps Script source file and exposes selected names
+ * to a test sandbox, mirroring Apps Script's global execution model.
+ */
 function compileSource(relativePath, exportNames) {
   const sourcePath = path.join(__dirname, '..', '..', relativePath);
   const source = fs.readFileSync(sourcePath, 'utf8');
   const output = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.None,
-      target: ts.ScriptTarget.ES2020,
+      // Match the production compiler so global script declarations behave alike.
+      target: ts.ScriptTarget.ES5,
     },
   }).outputText;
   const exports = exportNames
@@ -20,6 +25,10 @@ function compileSource(relativePath, exportNames) {
   return `${output}\n${exports}`;
 }
 
+/**
+ * Evaluates source files in order so a test can provide only the dependencies
+ * required for the behavior under test.
+ */
 function loadScripts(sandbox, scripts) {
   const context = vm.createContext(sandbox);
 
@@ -32,6 +41,9 @@ function loadScripts(sandbox, scripts) {
   return context;
 }
 
+/**
+ * Creates a minimal sheet double that records range mutations for assertions.
+ */
 function createSheet(name, lastRow) {
   const calls = [];
   return {
@@ -69,6 +81,9 @@ function createSheet(name, lastRow) {
   };
 }
 
+/**
+ * Creates a minimal Apps Script sandbox with queued HTTP responses.
+ */
 function createSandbox({ sheets, responses }) {
   const responseQueue = [...responses];
 
@@ -99,16 +114,33 @@ function createSandbox({ sheets, responses }) {
         };
       },
     },
+    Logger: {
+      log() {},
+    },
   };
 }
 
+/**
+ * Loads the dependency chain required by RankingUpdater integration tests.
+ */
 function loadRankings(sandbox) {
   return loadScripts(sandbox, [
-    { path: 'src/HttpClient.ts', exports: ['urlFetch'] },
-    { path: 'src/UpdateRankings.ts', exports: ['UpdateRankings'] },
+    { path: 'src/config/AppConfig.ts', exports: [] },
+    { path: 'src/config/SheetSchema.ts', exports: [] },
+    { path: 'src/shared/ErrorUtils.ts', exports: [] },
+    { path: 'src/shared/HtmlUtils.ts', exports: [] },
+    { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
+    { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    {
+      path: 'src/services/RankingUpdater.ts',
+      exports: ['RankingUpdater'],
+    },
   ]);
 }
 
+/**
+ * Builds the embedded JSON fragment expected from Board Game Arena's page.
+ */
 function rankingPage(games, tags) {
   return [
     '{"game_list":',
@@ -121,6 +153,9 @@ function rankingPage(games, tags) {
   ].join('');
 }
 
+/**
+ * Returns recorded sheet operations of a requested type.
+ */
 function getCalls(sheet, type) {
   return sheet.calls.filter((call) => call.type === type);
 }

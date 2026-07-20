@@ -4,6 +4,21 @@ Google Apps Script that adds a custom menu to a Google Spreadsheet for fetching 
 
 Developed with TypeScript and [clasp](https://github.com/google/clasp), running inside Docker via [mise](https://mise.jdx.dev/) tasks.
 
+## Architecture
+
+The Apps Script project keeps its global entry points deliberately small and
+groups the implementation by responsibility:
+
+- `src/entrypoints/` — Apps Script functions discovered by name (`onOpen`, `update`)
+- `src/services/` — update orchestration and sheet-specific business logic
+- `src/infrastructure/` — Apps Script API adapters for HTTP, properties, triggers, and sheets
+- `src/config/` — sheet layouts, endpoints, batch limits, and source-specific title rules
+- `src/shared/` — parsing and error-handling utilities shared by services
+
+The unified `update` command refreshes rankings and ratings immediately, then
+uses one time-driven trigger to finish game and title batches. This prevents
+independent legacy triggers from updating the same spreadsheet concurrently.
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -46,6 +61,15 @@ Rebuild Docker image.
 
 ```sh
 mise run build
+```
+
+## Verify
+
+Run the TypeScript check and unit tests before pushing a script change:
+
+```sh
+mise run typecheck
+mise run test
 ```
 
 ## Login

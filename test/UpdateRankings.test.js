@@ -9,9 +9,12 @@ const {
   rankingPage,
 } = require('./helpers/appScriptHarness');
 
+/** Tag ID used to verify catalog-to-sheet tag resolution. */
 const SMALL_CARD_GAME_TAG_ID = 101;
+/** Japanese tag name paired with the test ID. */
 const SMALL_CARD_GAME_TAG_NAME = 'カードゲーム';
 
+/** Builds a representative Board Game Arena game payload. */
 function rankingGame() {
   return {
     id: 1,
@@ -25,6 +28,7 @@ function rankingGame() {
   };
 }
 
+/** Builds a representative Board Game Arena tag payload. */
 function rankingTag() {
   return {
     id: SMALL_CARD_GAME_TAG_ID,
@@ -32,6 +36,7 @@ function rankingTag() {
   };
 }
 
+/** Returns the exact Rankings row expected from the representative payload. */
 function expectedRankingRow() {
   return [
     'https://ja.boardgamearena.com/gamepanel?game=azul',
@@ -52,7 +57,7 @@ function expectedRankingRow() {
   ];
 }
 
-test('UpdateRankings skips clearContent for a header-only Rankings sheet and writes fetched games', () => {
+test('RankingUpdater skips clearContent for a header-only Rankings sheet and writes fetched games', () => {
   const rankingsSheet = createSheet('Rankings', 1);
   const sandbox = createSandbox({
     sheets: { Rankings: rankingsSheet },
@@ -65,7 +70,7 @@ test('UpdateRankings skips clearContent for a header-only Rankings sheet and wri
   });
   const context = loadRankings(sandbox);
 
-  context.UpdateRankings.run();
+  context.RankingUpdater.run();
 
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(rankingsSheet, 'setValues'), [
@@ -80,7 +85,7 @@ test('UpdateRankings skips clearContent for a header-only Rankings sheet and wri
   ]);
 });
 
-test('UpdateRankings clears existing rows before writing fetched games', () => {
+test('RankingUpdater clears existing rows before writing fetched games', () => {
   const rankingsSheet = createSheet('Rankings', 4);
   const sandbox = createSandbox({
     sheets: { Rankings: rankingsSheet },
@@ -93,7 +98,7 @@ test('UpdateRankings clears existing rows before writing fetched games', () => {
   });
   const context = loadRankings(sandbox);
 
-  context.UpdateRankings.run();
+  context.RankingUpdater.run();
 
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), [
     { type: 'clearContent', row: 2, column: 1, numRows: 3, numColumns: 15 },
@@ -110,7 +115,7 @@ test('UpdateRankings clears existing rows before writing fetched games', () => {
   ]);
 });
 
-test('UpdateRankings keeps existing rows when fetched HTML has no games', () => {
+test('RankingUpdater keeps existing rows when fetched HTML has no games', () => {
   const rankingsSheet = createSheet('Rankings', 4);
   const sandbox = createSandbox({
     sheets: { Rankings: rankingsSheet },
@@ -123,7 +128,7 @@ test('UpdateRankings keeps existing rows when fetched HTML has no games', () => 
   });
   const context = loadRankings(sandbox);
 
-  context.UpdateRankings.run();
+  context.RankingUpdater.run();
 
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(rankingsSheet, 'setValues'), []);

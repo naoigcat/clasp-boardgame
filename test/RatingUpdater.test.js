@@ -1,0 +1,126 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+
+const {
+  createSheet,
+  getCalls,
+  loadScripts,
+} = require('./helpers/appScriptHarness');
+
+/**
+ * Creates the Apps Script doubles required to exercise RatingUpdater end to end.
+ */
+function createRatingSandbox({ ratingsSheet, userId, responses }) {
+  const responseQueue = [...responses];
+
+  return {
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Ratings' ? ratingsSheet : null;
+          },
+        };
+      },
+    },
+    PropertiesService: {
+      getScriptProperties() {
+        return {
+          getProperty(propertyName) {
+            return propertyName === 'BODOGE_USER_ID' ? userId : null;
+          },
+        };
+      },
+    },
+    UrlFetchApp: {
+      fetch(url) {
+        const response = responseQueue.shift();
+        assert.ok(response, `Unexpected fetch: ${url}`);
+        return {
+          getResponseCode() {
+            return response.status;
+          },
+          getContentText() {
+            return response.body;
+          },
+        };
+      },
+    },
+    Utilities: {
+      sleep() {},
+    },
+  };
+}
+
+/**
+ * Loads the production dependency chain used by RatingUpdater.
+ */
+function loadRatingUpdater(sandbox) {
+  return loadScripts(sandbox, [
+    { path: 'src/config/AppConfig.ts', exports: [] },
+    { path: 'src/config/SheetSchema.ts', exports: [] },
+    { path: 'src/config/TitleRules.ts', exports: [] },
+    { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
+    {
+      path: 'src/infrastructure/ScriptPropertyStore.ts',
+      exports: ['ScriptPropertyStore'],
+    },
+    { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/services/RatingUpdater.ts', exports: ['RatingUpdater'] },
+  ]);
+}
+
+/**
+ * Builds one Bodoge rating card in the markup shape consumed by RatingUpdater.
+ */
+function ratingCard(title, rating) {
+  return [
+    '<a class="list--interests-item-title">',
+    `<div class="list--interests-item-title-japanese">${title}</div>`,
+    `<div class="rating--result-stars" data-rating-mode="result" data-rating-result="${rating}">`,
+    '</div>',
+    '</a>',
+  ].join('');
+}
+
+test('RatingUpdater writes aliased ratings without clearing a header-only sheet', () => {
+  const ratingsSheet = createSheet('Ratings', 1);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('#hashtag', '4') },
+      { status: 200, body: '' },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 1,
+      numColumns: 2,
+      values: [['ハッシュタグ', '4']],
+    },
+  ]);
+});
+
+test('RatingUpdater leaves the Ratings sheet untouched without a configured user ID', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: null,
+    responses: [],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
