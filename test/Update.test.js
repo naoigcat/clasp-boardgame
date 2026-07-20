@@ -3,6 +3,9 @@ const test = require('node:test');
 
 const { loadScripts } = require('./helpers/appScriptHarness');
 
+/**
+ * Creates service and Apps Script doubles for update-queue behavior tests.
+ */
 function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
   const calls = [];
   const properties = new Map();
@@ -40,31 +43,31 @@ function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
         };
       },
     },
-    Triggers: {
-      deleteAll(handler) {
+    TriggerManager: {
+      removeAll(handler) {
         calls.push(['deleteTrigger', handler]);
       },
-      ensure(handler, intervalMinutes) {
+      ensureSingle(handler, intervalMinutes) {
         calls.push(['ensureTrigger', handler, intervalMinutes]);
       },
     },
-    UpdateGames: {
+    GameUpdater: {
       run() {
         calls.push(['games']);
         return gameResults.shift();
       },
     },
-    UpdateRankings: {
+    RankingUpdater: {
       run() {
         calls.push(['rankings']);
       },
     },
-    UpdateRatings: {
+    RatingUpdater: {
       run() {
         calls.push(['ratings']);
       },
     },
-    UpdateTitles: {
+    TitleUpdater: {
       run() {
         calls.push(['titles']);
         return titleResults.shift();
@@ -73,9 +76,21 @@ function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
   };
 }
 
+/**
+ * Loads the coordinator through its public Apps Script entry point.
+ */
 function loadUpdate(sandbox) {
   return loadScripts(sandbox, [
-    { path: 'src/Update.ts', exports: ['Update', 'update'] },
+    { path: 'src/config/AppConfig.ts', exports: [] },
+    {
+      path: 'src/infrastructure/ScriptPropertyStore.ts',
+      exports: ['ScriptPropertyStore'],
+    },
+    {
+      path: 'src/services/UpdateCoordinator.ts',
+      exports: ['UpdateCoordinator'],
+    },
+    { path: 'src/entrypoints/Update.ts', exports: ['update'] },
   ]);
 }
 

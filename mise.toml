@@ -34,3 +34,11 @@ run = [
 [tasks.format]
 description = "Format code with Prettier"
 run = "docker compose run --rm --entrypoint bash clasp -c 'prettier --write .'"
+
+[tasks.typecheck]
+description = "Type-check Apps Script source without emitting JavaScript"
+run = "docker compose run --rm --entrypoint bash clasp -c 'npm install --no-save --package-lock=false typescript@5.8.3 @types/google-apps-script@^1.0.81 && npx tsc --noEmit'"
+
+[tasks.test]
+description = "Run unit tests against the Apps Script harness"
+run = "docker compose run --rm --entrypoint bash clasp -c 'npm install --no-save --package-lock=false typescript@5.8.3 && node --test test/*.test.js'"
