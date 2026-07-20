@@ -19,6 +19,48 @@ The unified `update` command refreshes rankings and ratings immediately, then
 uses one time-driven trigger to finish game and title batches. This prevents
 independent legacy triggers from updating the same spreadsheet concurrently.
 
+## Update behavior
+
+Open the spreadsheet and select **Functions > Update** to start an update. The
+menu action deliberately does not try to finish every external request in one
+Apps Script execution:
+
+1. Rankings are imported from Board Game Arena and ratings are imported from
+   Bodoge in the initial execution.
+2. The coordinator saves the Games phase and creates one five-minute,
+   time-driven trigger.
+3. Each trigger execution refreshes at most 50 stale BoardGameGeek game rows.
+   A game is stale when it has never been updated or its last successful update
+   is seven days old or older.
+4. Once Games is complete, each subsequent execution normalizes at most 100
+   Board Game Arena titles.
+5. The trigger and transient queue state are removed after the final title
+   batch.
+
+The project uses an Apps Script lock, so an overlapping menu click or trigger
+execution is skipped rather than allowing two executions to write the same
+sheet. Starting the menu command again intentionally restarts the queue: it
+removes the prior queue trigger and its saved phase before beginning a new
+cycle. Do not create an additional trigger for the update handler manually.
+
+## Spreadsheet contract
+
+Keep the following sheet names and a header row in row 1. The updater treats
+these tabs as an application data contract; renaming a tab or changing the
+managed column order requires a corresponding change in the configuration.
+
+| Sheet | Required input | How the updater manages it |
+| --- | --- | --- |
+| Games | A BoardGameGeek rich-text link in column A for each game | Reads rows until the first blank link, then refreshes the managed values in columns B through AA. Formula-dependent cells are cleared before values are rewritten so sheet formulas can recalculate from current data. |
+| Rankings | Header row only | Replaces rows below the header with the current Board Game Arena catalog. An empty parsed catalog leaves the previous snapshot untouched. |
+| Titles | Header row only; existing URL rows are preserved | Adds Board Game Arena URLs found in Rankings, stores the source Japanese title, its canonical matching title, and the most recent error. |
+| Ratings | Header row only | Replaces rows below the header with the configured Bodoge user's ratings after its pages have been fetched without a request error. |
+
+The exact column positions and batch limits are centralized in
+src/config/SheetSchema.ts and src/config/AppConfig.ts. Use those files when a
+spreadsheet layout or an external-source rule must change; do not duplicate
+magic column numbers in a service.
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/)
@@ -55,6 +97,23 @@ Some features call the [BoardGameGeek XML API](https://boardgamegeek.com/using_t
 
 Without `TOKEN`, unauthenticated requests may be rate-limited or fail.
 
+Set the optional `BODOGE_USER_ID` script property to import a Bodoge user's
+played-game ratings. When it is absent or empty, the Ratings sheet is left
+unchanged. The `UPDATE_STEP` property is maintained internally while a
+multi-execution update is pending; do not create or edit it manually.
+
+Store tokens and user IDs only in Apps Script script properties. They are
+environment-specific configuration and must not be committed to the
+repository.
+
+### First update
+
+After pushing the project and setting the required properties, reload the
+target spreadsheet so Apps Script runs onOpen and shows the **Functions** menu.
+Choose **Update** once, then allow the managed trigger to finish any remaining
+Games and Titles batches. Execution logs in the Apps Script editor show skipped
+overlaps and row-level external-service errors.
+
 ## Build
 
 Rebuild Docker image.
@@ -71,6 +130,37 @@ Run the TypeScript check and unit tests before pushing a script change:
 mise run typecheck
 mise run test
 ```
+
+Use the following routine for local changes:
+
+1. Run `mise run format` after editing TypeScript or documentation.
+2. Run `mise run typecheck` to validate the Apps Script types without
+   generating JavaScript.
+3. Run `mise run test` to execute the Node-based Apps Script harness.
+4. Run `mise run push` only after the checks pass and you intend to deploy.
+
+The test harness validates service behavior without contacting the external
+sites. It is therefore suitable for checking parsing, queue transitions, and
+sheet-write behavior locally, but it cannot detect a source site's HTML or API
+format change.
+
+## Failure handling
+
+- A failed BoardGameGeek game lookup records its message in that Games row and
+  keeps its last-success timestamp unchanged, allowing a later trigger to
+  retry it.
+- A failed title lookup records its message in Titles and leaves the canonical
+  title blank, which also makes the row eligible for a later retry.
+- Rankings are cleared only after a non-empty catalog has been fetched and
+  parsed, preserving the last snapshot when the request or catalog parser
+  fails.
+- A request failure while Bodoge pages are being fetched occurs before Ratings
+  is cleared. However, an unrecognized Bodoge page is currently treated as the
+  end of the list, so verify the imported row count after that source changes
+  its HTML.
+- For logged BoardGameGeek, title, or Board Game Arena catalog failures, inspect
+  the Apps Script execution log and update the relevant parser or title rule
+  before rerunning the update.
 
 ## Login
 

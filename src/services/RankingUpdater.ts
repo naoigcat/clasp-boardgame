@@ -51,6 +51,8 @@ class RankingUpdater {
 
     const rows = RankingUpdater.parseRows(response.getContentText());
     if (rows.length === 0) {
+      // An unexpectedly empty catalog is safer to treat as a source problem
+      // than to replace the last known ranking snapshot with no rows.
       return;
     }
 
