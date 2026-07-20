@@ -34,6 +34,8 @@ class RatingUpdater {
     }
 
     const rows = RatingUpdater.fetchAllRows(userId);
+    // Fetch before clearing so a request failure on a later page preserves the
+    // last complete ratings snapshot instead of publishing a partial import.
     rows.sort(([firstTitle], [secondTitle]) =>
       firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
     );

@@ -46,6 +46,8 @@ class GameUpdater {
     }
 
     const rows = GameUpdater.loadRows(sheet);
+    // A single reference time prevents a long batch from making equivalent rows
+    // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
     if (GameUpdater.countPendingRows(rows, current) === 0) {
       return false;
@@ -240,6 +242,8 @@ class GameUpdater {
         SCRIPT_PROPERTY_KEYS.BOARD_GAME_GEEK_TOKEN,
       ),
     );
+    // Throttle failed responses too, so retries cannot turn an upstream outage
+    // into a burst of requests.
     Utilities.sleep(BOARD_GAME_GEEK_CONFIG.REQUEST_DELAY_MILLISECONDS);
 
     if (response.getResponseCode() !== 200) {

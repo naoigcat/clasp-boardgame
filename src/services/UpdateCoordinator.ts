@@ -11,6 +11,8 @@ class UpdateCoordinator {
   static run(isScheduledExecution: boolean): void {
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(0)) {
+      // The active invocation owns the next batch schedule, so waiting here
+      // would only spend Apps Script execution time while it owns the sheets.
       Logger.log('Skipped update because another update is already running.');
       return;
     }
@@ -33,6 +35,8 @@ class UpdateCoordinator {
     UpdateCoordinator.removeSupersededTriggers();
     ScriptPropertyStore.remove(UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY);
 
+    // These imports replace complete sheet snapshots and normally fit in one
+    // execution; the slower per-game work is deliberately deferred to batches.
     RankingUpdater.run();
     RatingUpdater.run();
 
@@ -64,6 +68,8 @@ class UpdateCoordinator {
       return;
     }
 
+    // A missing or obsolete state must not leave an orphaned trigger running
+    // forever after properties have been edited or a deployment has changed.
     UpdateCoordinator.finishUpdate();
   }
 

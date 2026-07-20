@@ -135,6 +135,8 @@ class TitleUpdater {
       Logger.log(`Error updating title for ${gameUrl}: ${errorMessage}`);
       row[TITLE_COLUMN.ERROR_MESSAGE] = errorMessage;
     } finally {
+      // Keep the same pacing after a parse or HTTP error to avoid amplifying a
+      // temporary Board Game Arena failure with immediate retries.
       Utilities.sleep(BOARD_GAME_ARENA_TITLE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
   }
@@ -156,6 +158,9 @@ class TitleUpdater {
 
   /**
    * Normalizes a source title into the spelling used for spreadsheet matching.
+   *
+   * Generic rules run first so aliases do not need duplicate entries for
+   * punctuation and edition-label variants of the same title.
    */
   static normalizeTitle(sourceTitle: string): string {
     const normalizedTitle = TitleUpdater.applyGenericNormalizations(sourceTitle);
