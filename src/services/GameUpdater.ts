@@ -172,16 +172,14 @@ class GameUpdater {
   }
 
   /**
-   * Clears dependent formula inputs and refreshes one eligible row if capacity
-   * remains in the current batch.
+   * Refreshes one eligible row and clears its dependent formula inputs after a
+   * successful metadata update.
    */
   private static updateRow(
     row: GameSheetRow,
     current: Date,
     progress: GameBatchProgress,
   ): void {
-    GameUpdater.clearArrayFormulaInputs(row);
-
     const gameUrl = row.gameLink?.getLinkUrl() ?? null;
     if (
       gameUrl === null ||
@@ -196,16 +194,18 @@ class GameUpdater {
       const gameReference = GameUpdater.parseGameReference(gameUrl);
       const gameItem = GameUpdater.fetchGameItem(gameReference);
       GameUpdater.applyGameItem(row, gameItem, gameReference.id, current);
+      GameUpdater.clearArrayFormulaInputs(row);
     } catch (error: unknown) {
       GameUpdater.recordFailure(row, gameUrl, error);
     }
   }
 
   /**
-   * Clears values owned by array formulas before their source metadata changes.
+   * Clears values owned by array formulas after a successful metadata refresh.
    *
-   * Resetting these cells prevents stale formula outputs from blocking formula
-   * expansion after a refreshed row changes its matching data.
+   * Waiting for a completed refresh preserves the previous derived values when
+   * the upstream response is unavailable, while still allowing formulas to
+   * recalculate from changed metadata.
    */
   private static clearArrayFormulaInputs(row: GameSheetRow): void {
     GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
