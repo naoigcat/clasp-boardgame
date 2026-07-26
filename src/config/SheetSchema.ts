@@ -45,7 +45,7 @@ const GAME_VALUE_COLUMN = {
   DERIVED_RATING: 22,
   /** Formula input cleared before refreshing a game. */
   DERIVED_TITLE_MATCH: 23,
-  /** Timestamp of the last successful BoardGameGeek update. */
+  /** Timestamp of the last BoardGameGeek update attempt. */
   LAST_UPDATED_AT: 24,
   /** Latest fetch or parsing error for the row. */
   ERROR_MESSAGE: 25,

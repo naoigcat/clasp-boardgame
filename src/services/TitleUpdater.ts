@@ -18,25 +18,46 @@ class TitleUpdater {
     }
 
     const rows = TitleUpdater.loadRows(titlesSheet, rankingsSheet);
-    if (TitleUpdater.countPendingRows(rows) === 0) {
+    const pendingRows = rows.filter((row) =>
+      TitleUpdater.needsNormalization(row),
+    );
+    if (pendingRows.length === 0) {
       return false;
     }
 
-    let processedCount = 0;
-    rows.forEach((row) => {
-      if (
-        !TitleUpdater.needsNormalization(row) ||
-        processedCount >= UPDATE_QUEUE_CONFIG.TITLE_BATCH_SIZE
-      ) {
-        return;
-      }
+    // Rows that already failed stay eligible for retry, but unattempted rows
+    // must advance first so a permanently broken head cannot stall the queue.
+    const preferredRows = pendingRows.filter(
+      (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
+    );
+    const retryingOnlyFailures = preferredRows.length === 0;
+    const batchRows = (
+      retryingOnlyFailures ? pendingRows : preferredRows
+    ).slice(0, UPDATE_QUEUE_CONFIG.TITLE_BATCH_SIZE);
 
-      processedCount += 1;
+    batchRows.forEach((row) => {
       TitleUpdater.updateRow(row);
     });
 
     TitleUpdater.writeRows(titlesSheet, rows);
-    return TitleUpdater.countPendingRows(rows) > 0;
+    if (retryingOnlyFailures) {
+      // One retry pass is enough for this cycle; remaining failures wait for a
+      // later update instead of holding the shared trigger open forever.
+      return false;
+    }
+
+    if (
+      rows.some(
+        (row) =>
+          TitleUpdater.needsNormalization(row) &&
+          !row[TITLE_COLUMN.ERROR_MESSAGE],
+      )
+    ) {
+      return true;
+    }
+
+    // Keep the queue alive so the next invocation can run the failure-retry pass.
+    return rows.some((row) => TitleUpdater.needsNormalization(row));
   }
 
   /**
@@ -105,7 +126,9 @@ class TitleUpdater {
    * Determines whether a title row still needs its canonical title.
    */
   private static needsNormalization(row: TitleSheetRow): boolean {
-    return Boolean(row[TITLE_COLUMN.URL]) && !row[TITLE_COLUMN.NORMALIZED_TITLE];
+    return (
+      Boolean(row[TITLE_COLUMN.URL]) && !row[TITLE_COLUMN.NORMALIZED_TITLE]
+    );
   }
 
   /**
@@ -147,7 +170,9 @@ class TitleUpdater {
   private static fetchSourceTitle(gameUrl: string): string {
     const response = HttpClient.get(gameUrl);
     if (response.getResponseCode() !== 200) {
-      throw new Error(`Board Game Arena returned HTTP ${response.getResponseCode()}`);
+      throw new Error(
+        `Board Game Arena returned HTTP ${response.getResponseCode()}`,
+      );
     }
 
     const match = response
@@ -163,7 +188,8 @@ class TitleUpdater {
    * punctuation and edition-label variants of the same title.
    */
   static normalizeTitle(sourceTitle: string): string {
-    const normalizedTitle = TitleUpdater.applyGenericNormalizations(sourceTitle);
+    const normalizedTitle =
+      TitleUpdater.applyGenericNormalizations(sourceTitle);
     const prefixAlias = Object.keys(TITLE_NORMALIZATION_PREFIX_ALIASES).find(
       (prefix) => normalizedTitle.startsWith(prefix),
     );

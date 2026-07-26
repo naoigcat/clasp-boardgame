@@ -92,9 +92,7 @@ class GameUpdater {
       (row) => row.gameLink === null || row.gameLink.getText().length === 0,
     );
 
-    return firstEmptyRowIndex === -1
-      ? rows
-      : rows.slice(0, firstEmptyRowIndex);
+    return firstEmptyRowIndex === -1 ? rows : rows.slice(0, firstEmptyRowIndex);
   }
 
   /**
@@ -164,7 +162,8 @@ class GameUpdater {
     rows: readonly GameSheetRow[],
   ): GameSheetRow[] {
     return rows.slice().sort((first, second) => {
-      const firstUpdatedAt = GameUpdater.getLastUpdatedAt(first)?.getTime() ?? 0;
+      const firstUpdatedAt =
+        GameUpdater.getLastUpdatedAt(first)?.getTime() ?? 0;
       const secondUpdatedAt =
         GameUpdater.getLastUpdatedAt(second)?.getTime() ?? 0;
       return firstUpdatedAt - secondUpdatedAt;
@@ -196,7 +195,7 @@ class GameUpdater {
       GameUpdater.applyGameItem(row, gameItem, gameReference.id, current);
       GameUpdater.clearArrayFormulaInputs(row);
     } catch (error: unknown) {
-      GameUpdater.recordFailure(row, gameUrl, error);
+      GameUpdater.recordFailure(row, gameUrl, error, current);
     }
   }
 
@@ -349,9 +348,8 @@ class GameUpdater {
         return;
       }
 
-      recommendations[
-        getRequiredXmlAttributeValue(results, 'numplayers')
-      ] = getRequiredXmlAttributeValue(mostVotedResult, 'value');
+      recommendations[getRequiredXmlAttributeValue(results, 'numplayers')] =
+        getRequiredXmlAttributeValue(mostVotedResult, 'value');
     });
 
     return {
@@ -394,19 +392,22 @@ class GameUpdater {
   /**
    * Records a row-level error while allowing the rest of the batch to proceed.
    *
-   * The update timestamp intentionally remains unchanged so a later trigger can
-   * retry a transient upstream failure instead of treating stale data as fresh.
+   * Advancing the attempt timestamp keeps permanent failures from monopolizing
+   * every oldest-first batch; the refresh window later makes the row eligible
+   * again so transient outages are still retried.
    */
   private static recordFailure(
     row: GameSheetRow,
     gameUrl: string,
     error: unknown,
+    current: Date,
   ): void {
     const rowIdentifier = row.gameLink?.getText() || 'unnamed game';
     const errorMessage = getErrorMessage(error);
     Logger.log(
       `Error processing ${rowIdentifier} (URL: ${gameUrl}): ${errorMessage}`,
     );
+    row.values[GAME_VALUE_COLUMN.LAST_UPDATED_AT] = current;
     row.values[GAME_VALUE_COLUMN.ERROR_MESSAGE] = errorMessage;
   }
 }
