@@ -1,10 +1,16 @@
 /**
  * One-based row and column positions used by Apps Script range APIs.
+ *
+ * Centralizing layout constants keeps services free of magic numbers and makes
+ * a spreadsheet redesign a configuration change rather than a service rewrite.
  */
 const SHEET_LAYOUT = {
   /** The header occupies the first row in every managed sheet. */
   FIRST_DATA_ROW: 2,
-  /** First column of the Games range written after a metadata refresh. */
+  /**
+   * First column written after a Games metadata refresh. Column A stays
+   * untouched so the rich-text BoardGameGeek link is preserved.
+   */
   GAMES_WRITE_START_COLUMN: 2,
   /** First column of the Titles range. */
   TITLES_START_COLUMN: 1,
@@ -21,13 +27,17 @@ const SHEET_LAYOUT = {
 /**
  * Zero-based positions in a Games row after column A has been separated as a
  * rich-text link and columns B through AA have been loaded as cell values.
+ *
+ * Derived columns are owned by spreadsheet array formulas. The updater clears
+ * them after a successful refresh so those formulas recalculate from the new
+ * BoardGameGeek metadata instead of retaining stale manual values.
  */
 const GAME_VALUE_COLUMN = {
-  /** Formula input cleared before refreshing a game. */
+  /** Array-formula input that resolves the display title for the row. */
   DERIVED_TITLE: 1,
-  /** Formula input cleared before refreshing a game. */
+  /** Array-formula input that resolves the preferred player-count summary. */
   DERIVED_PLAYER_COUNT: 4,
-  /** First column for recommended player counts, representing two players. */
+  /** First recommendation column; offset 0 means two players. */
   PLAYER_RECOMMENDATION_START: 7,
   /** BoardGameGeek's overall board-game rank. */
   BOARD_GAME_RANK: 16,
@@ -39,23 +49,26 @@ const GAME_VALUE_COLUMN = {
   PLAY_TIME: 19,
   /** BoardGameGeek's publication year. */
   PUBLICATION_YEAR: 20,
-  /** Formula input cleared before refreshing a game. */
+  /** Array-formula input that joins the row to Rankings data. */
   DERIVED_RANKING: 21,
-  /** Formula input cleared before refreshing a game. */
+  /** Array-formula input that joins the row to Ratings data. */
   DERIVED_RATING: 22,
-  /** Formula input cleared before refreshing a game. */
+  /** Array-formula input that joins the row to Titles matching. */
   DERIVED_TITLE_MATCH: 23,
-  /** Timestamp of the last BoardGameGeek update attempt. */
+  /**
+   * Timestamp of the last BoardGameGeek update attempt. Advanced on failure as
+   * well as success so permanent errors rotate out of the oldest-first queue.
+   */
   LAST_UPDATED_AT: 24,
-  /** Latest fetch or parsing error for the row. */
+  /** Latest fetch or parsing error shown beside the game for troubleshooting. */
   ERROR_MESSAGE: 25,
 } as const;
 
 /**
  * Games columns reset to leave room for dependent array formulas.
  *
- * The formulas own these values, so a refresh must not preserve stale manual
- * values when their source data changes.
+ * Clearing happens only after a successful metadata refresh so a failed fetch
+ * still leaves the previous derived values visible until the next success.
  */
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [
   GAME_VALUE_COLUMN.DERIVED_TITLE,
@@ -67,14 +80,17 @@ const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [
 
 /**
  * Zero-based positions in a Titles sheet row.
+ *
+ * Existing rows are preserved across updates; Rankings only contributes new
+ * URLs. The canonical title column is the join key used by Games formulas.
  */
 const TITLE_COLUMN = {
-  /** Board Game Arena game URL. */
+  /** Board Game Arena game URL shared with the Rankings sheet. */
   URL: 0,
-  /** Original Japanese title scraped from the source page. */
+  /** Original Japanese title scraped from the game panel page. */
   SOURCE_TITLE: 1,
-  /** Canonical title used for spreadsheet matching. */
+  /** Canonical title used for spreadsheet matching after normalization. */
   NORMALIZED_TITLE: 2,
-  /** Latest title lookup or normalization error. */
+  /** Latest title lookup or normalization error left blank after a success. */
   ERROR_MESSAGE: 3,
 } as const;

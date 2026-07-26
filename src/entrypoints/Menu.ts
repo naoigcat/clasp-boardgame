@@ -2,7 +2,8 @@
  * Adds the custom update command when the spreadsheet UI opens.
  *
  * Apps Script discovers this global function by name, so it intentionally
- * remains a small entry point instead of living inside a service class.
+ * remains a small entry point instead of living inside a service class. The
+ * menu item binds to the same `update` handler used by the time-driven trigger.
  */
 function onOpen(): void {
   SpreadsheetApp.getUi()

@@ -2,48 +2,63 @@
  * Spreadsheet tab names used by the update services.
  *
  * Keeping these names together makes a renamed tab an explicit configuration
- * change instead of a hidden dependency inside a service.
+ * change instead of a hidden dependency inside a service. The updater treats
+ * these names as a contract with the spreadsheet UI.
  */
 const SHEET_NAMES = {
-  /** Stores BoardGameGeek game metadata. */
+  /** BoardGameGeek metadata keyed by rich-text links in column A. */
   GAMES: 'Games',
-  /** Stores games fetched from Board Game Arena. */
+  /** Current Board Game Arena catalog snapshot used as the Titles source. */
   RANKINGS: 'Rankings',
-  /** Stores the original and normalized game titles. */
+  /** Canonical titles that join Rankings URLs to spreadsheet matching formulas. */
   TITLES: 'Titles',
-  /** Stores ratings imported from Bodoge. */
+  /** Bodoge played-game ratings consumed by Games sheet formulas. */
   RATINGS: 'Ratings',
 } as const;
 
 /**
  * Settings for the single trigger that advances a multi-run update.
  *
- * A shared trigger keeps Apps Script trigger quotas predictable while batches
- * are still pending.
+ * Apps Script executions are time-capped, so Rankings/Ratings run immediately
+ * while Games and Titles advance in smaller batches. One shared trigger keeps
+ * quota use predictable and prevents legacy per-service triggers from racing.
  */
 const UPDATE_QUEUE_CONFIG = {
-  /** Global function invoked by the time-driven trigger. */
+  /** Global function name Apps Script binds to the time-driven trigger. */
   HANDLER_NAME: 'update',
-  /** Script-property key that records the next asynchronous phase. */
+  /** Script-property key that records which asynchronous phase should resume. */
   STEP_PROPERTY_KEY: 'UPDATE_STEP',
-  /** Stored value for the BoardGameGeek game-metadata phase. */
+  /** Stored value while BoardGameGeek game metadata is still pending. */
   GAMES_STEP: 'games',
-  /** Stored value for the title-normalization phase. */
+  /** Stored value after Games finishes and title normalization remains. */
   TITLES_STEP: 'titles',
-  /** Interval used to resume a pending phase. */
+  /**
+   * Resume interval for the next batch. Five minutes balances progress against
+   * UrlFetch and trigger quotas without overlapping typical batch runtimes.
+   */
   TRIGGER_INTERVAL_MINUTES: 5,
-  /** Maximum number of BoardGameGeek games updated in one invocation. */
+  /**
+   * Games processed per invocation. Sized so delayed BoardGameGeek requests
+   * usually finish inside one Apps Script execution.
+   */
   GAME_BATCH_SIZE: 50,
-  /** Maximum number of titles normalized in one invocation. */
+  /**
+   * Titles normalized per invocation. Higher than the game batch because each
+   * title fetch is cheaper and paced with a shorter delay.
+   */
   TITLE_BATCH_SIZE: 100,
-  /** Number of days a BoardGameGeek response remains fresh. */
+  /**
+   * Days a successful or failed game fetch stays ineligible. Failures advance
+   * the timestamp too so permanent errors do not monopolize oldest-first batches.
+   */
   GAME_REFRESH_INTERVAL_DAYS: 7,
 } as const;
 
 /**
  * Legacy handlers that must be removed before the unified update queue starts.
  *
- * Removing them prevents an older deployment from racing with the new queue.
+ * Older deployments created one trigger per sheet. Leaving them active would
+ * let those handlers write the same spreadsheet while the unified queue runs.
  */
 const LEGACY_UPDATE_HANDLER_NAMES = [
   'updateGames',
@@ -54,35 +69,49 @@ const LEGACY_UPDATE_HANDLER_NAMES = [
 
 /**
  * Property keys managed in the Apps Script project settings.
+ *
+ * Values live outside source control so each deployment can use its own
+ * BoardGameGeek token and Bodoge user without code changes.
  */
 const SCRIPT_PROPERTY_KEYS = {
-  /** Optional BoardGameGeek API token. */
+  /** Optional BoardGameGeek API token that relaxes anonymous request limits. */
   BOARD_GAME_GEEK_TOKEN: 'TOKEN',
-  /** Bodoge user ID whose ratings are imported. */
+  /** Bodoge user ID whose played-game ratings are imported into Ratings. */
   BODOGE_USER_ID: 'BODOGE_USER_ID',
 } as const;
 
 /**
  * BoardGameGeek endpoint settings.
+ *
+ * The thing API returns XML with statistics and player-count polls. Requests
+ * are deliberately paced because anonymous and token-authenticated clients
+ * both face upstream rate limits.
  */
 const BOARD_GAME_GEEK_CONFIG = {
-  /** XML API endpoint used to fetch a game's statistics. */
+  /** XML API endpoint used to fetch one game's statistics and polls. */
   THING_ENDPOINT: 'https://boardgamegeek.com/xmlapi2/thing',
   /** Lowest player count represented by the spreadsheet's recommendation columns. */
   MIN_SUPPORTED_PLAYER_COUNT: 2,
-  /** Number of consecutive player-count columns written to the spreadsheet. */
+  /**
+   * Consecutive player-count columns written beside that minimum. The sheet
+   * layout expects this many recommendation cells before rank and rating fields.
+   */
   SUPPORTED_PLAYER_COUNT_TOTAL: 10,
-  /** Delay between requests to respect the upstream API. */
+  /** Delay between requests so retries cannot burst during an upstream outage. */
   REQUEST_DELAY_MILLISECONDS: 2000,
 } as const;
 
 /**
  * Board Game Arena endpoints and tag rules.
+ *
+ * The Japanese home page embeds the full catalog as JSON. Some tags describe
+ * platform implementation details rather than game traits, so they are omitted
+ * from the Rankings sheet's human-readable tag column.
  */
 const BOARD_GAME_ARENA_CONFIG = {
-  /** Page that embeds the game and tag metadata. */
+  /** Page whose HTML embeds `game_list` and `game_tags` JSON arrays. */
   HOME_PAGE_URL: 'https://ja.boardgamearena.com',
-  /** Base URL used to open a game's panel. */
+  /** Base URL used to open a game's panel; Rankings stores the full URL. */
   GAME_PANEL_URL: 'https://ja.boardgamearena.com/gamepanel?game=',
   /** Tags that describe implementation details rather than game characteristics. */
   IGNORED_TAG_IDS: [2, 3, 4, 10, 11, 12, 20, 21, 28, 29, 31, 300, 301],
@@ -92,6 +121,9 @@ const BOARD_GAME_ARENA_CONFIG = {
 
 /**
  * Board Game Arena page parsing settings for title collection.
+ *
+ * Titles are scraped from individual game panels because the catalog embed
+ * does not expose the Japanese display name used for spreadsheet matching.
  */
 const BOARD_GAME_ARENA_TITLE_CONFIG = {
   /** Pattern used to extract the Japanese game name from a game panel page. */
@@ -103,6 +135,9 @@ const BOARD_GAME_ARENA_TITLE_CONFIG = {
 
 /**
  * Bodoge endpoint and polling settings.
+ *
+ * Ratings are paginated HTML cards. The user ID is read from script properties
+ * so the same project can target different Bodoge accounts per deployment.
  */
 const BODOGE_CONFIG = {
   /** URL prefix for the paginated list of played games. */
@@ -115,6 +150,9 @@ const BODOGE_CONFIG = {
 
 /**
  * Custom spreadsheet menu settings.
+ *
+ * Labels are configuration so the spreadsheet UI can change without hunting
+ * through the Apps Script entry point.
  */
 const MENU_CONFIG = {
   /** Menu label shown in the spreadsheet UI. */

@@ -1,8 +1,10 @@
 /**
  * Extracts and parses an array-valued JSON property embedded in an HTML page.
  *
- * Board Game Arena embeds JSON inside its page source, so bracket matching is
- * used instead of a greedy regular expression that could consume a later field.
+ * Board Game Arena embeds catalog JSON inside its page source rather than
+ * exposing a dedicated API. Bracket matching is used instead of a greedy
+ * regular expression so a later field that also contains brackets cannot be
+ * accidentally consumed into the target array.
  */
 function extractEmbeddedJsonArray(page: string, propertyName: string): unknown[] {
   const propertyToken = `"${propertyName}"`;
@@ -26,6 +28,9 @@ function extractEmbeddedJsonArray(page: string, propertyName: string): unknown[]
 
 /**
  * Finds the inclusive end index of a JSON array while respecting quoted text.
+ *
+ * Depth tracking alone is not enough: brackets that appear inside string
+ * literals must be ignored, and escaped quotes must not end those literals.
  */
 function findJsonArrayEnd(source: string, arrayStartIndex: number): number {
   let depth = 0;
@@ -37,6 +42,7 @@ function findJsonArrayEnd(source: string, arrayStartIndex: number): number {
 
     if (isInsideString) {
       if (isEscaped) {
+        // The previous character was a backslash; this character is literal.
         isEscaped = false;
       } else if (character === '\\') {
         isEscaped = true;

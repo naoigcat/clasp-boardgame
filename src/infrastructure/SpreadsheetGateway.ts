@@ -1,5 +1,15 @@
 /**
+ * Thin adapters around SpreadsheetApp used by the update services.
+ *
+ * Isolating these calls keeps services focused on board-game data rules and
+ * makes spreadsheet edge cases (missing tabs, empty data ranges) explicit.
+ */
+
+/**
  * Retrieves a sheet from the active spreadsheet by its configured name.
+ *
+ * Returning null lets callers skip work when a tab has been renamed or removed
+ * instead of failing the entire update cycle.
  */
 function findSheet(
   sheetName: string,
@@ -10,8 +20,9 @@ function findSheet(
 /**
  * Clears only data rows below a header when such rows exist.
  *
- * Apps Script rejects zero-height ranges, so this guard keeps empty sheets a
- * valid state rather than an exceptional one.
+ * Apps Script rejects zero-height ranges, so this guard keeps an empty sheet a
+ * valid state rather than an exceptional one. Headers stay intact because
+ * Rankings and Ratings always rewrite from row 2 downward.
  */
 function clearSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,

@@ -1,3 +1,9 @@
+/**
+ * RatingUpdater import and snapshot-preservation tests.
+ *
+ * Verifies pagination until Bodoge's empty marker, title alias expansion, and
+ * keeping the previous Ratings sheet when HTML is unrecognized mid-import.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 

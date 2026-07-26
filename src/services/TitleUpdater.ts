@@ -5,10 +5,19 @@ type TitleSheetRow = SpreadsheetCellRow;
 
 /**
  * Synchronizes Board Game Arena titles and converts them to canonical names.
+ *
+ * Rankings contributes new URLs; existing Titles rows are preserved so manual
+ * corrections and prior scrape results survive catalog refreshes. Normalization
+ * produces the join key used by Games sheet formulas.
  */
 class TitleUpdater {
   /**
    * Updates one batch of incomplete title rows and reports whether work remains.
+   *
+   * Unattempted rows are preferred over rows that already failed so one broken
+   * head of the queue cannot stall every later title. After only failures remain,
+   * a single retry pass runs and the queue ends so permanent errors wait for the
+   * next manual update instead of holding the shared trigger open forever.
    */
   static run(): boolean {
     const rankingsSheet = findSheet(SHEET_NAMES.RANKINGS);
@@ -62,6 +71,9 @@ class TitleUpdater {
 
   /**
    * Combines existing title rows with Ranking URLs that have not been seen yet.
+   *
+   * New URLs are appended with blank titles so later batches scrape them. Known
+   * URLs keep their prior source title, canonical title, and error cells.
    */
   private static loadRows(
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -124,6 +136,9 @@ class TitleUpdater {
 
   /**
    * Determines whether a title row still needs its canonical title.
+   *
+   * A blank normalized title keeps the row eligible even when an error message
+   * is present, which is how failed scrapes re-enter a later retry pass.
    */
   private static needsNormalization(row: TitleSheetRow): boolean {
     return (
@@ -140,6 +155,8 @@ class TitleUpdater {
     const gameUrl = String(row[TITLE_COLUMN.URL]);
 
     try {
+      // Reuse a previously scraped source title so retries only re-normalize
+      // when the HTTP fetch already succeeded in an earlier batch.
       if (!row[TITLE_COLUMN.SOURCE_TITLE]) {
         row[TITLE_COLUMN.SOURCE_TITLE] = TitleUpdater.fetchSourceTitle(gameUrl);
       }
@@ -185,7 +202,8 @@ class TitleUpdater {
    * Normalizes a source title into the spelling used for spreadsheet matching.
    *
    * Generic rules run first so aliases do not need duplicate entries for
-   * punctuation and edition-label variants of the same title.
+   * punctuation and edition-label variants of the same title. Prefix aliases
+   * cover whole series; exact aliases handle one-off naming mismatches.
    */
   static normalizeTitle(sourceTitle: string): string {
     const normalizedTitle =
@@ -204,16 +222,23 @@ class TitleUpdater {
 
   /**
    * Applies source-independent punctuation, edition, and whitespace rules.
+   *
+   * These cleanups strip marketing noise that differs between Board Game Arena
+   * panels and the spreadsheet's canonical titles before alias lookup runs.
    */
   private static applyGenericNormalizations(sourceTitle: string): string {
     return sourceTitle
+      // Drop hyphen-wrapped edition or marketing suffixes.
       .replace(/-.*-/g, '')
+      // Prefer full-width ampersands used by Japanese spreadsheet titles.
       .replace(/&amp;/g, '＆')
       .replace(/!/g, '！')
       .replace(/ - /g, ' － ')
+      // Remove edition labels that would otherwise create near-duplicate keys.
       .replace(/《?新版》?/g, '')
       .replace(/第\d+版/g, '')
       .replace(/\(.*?パック\)/, '')
+      // Normalize mixed-width separators to the forms used in the sheet.
       .replace(/\s*･\s*/g, '・')
       .replace(/\s*:\s*/g, '：')
       .trim();

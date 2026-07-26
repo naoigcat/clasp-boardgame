@@ -1,9 +1,17 @@
+/**
+ * GameUpdater batch and refresh-policy tests.
+ *
+ * Focuses on empty sheets, oldest-first batching, derived-column clearing on
+ * success, and advancing failure timestamps so permanent errors rotate out.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { loadScripts } = require('./helpers/appScriptHarness');
 
+/** Zero-based Games value columns owned by spreadsheet array formulas. */
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [1, 4, 21, 22, 23];
+/** Zero-based Games value column that stores the last update attempt. */
 const GAME_LAST_UPDATED_AT_COLUMN = 24;
 
 /**

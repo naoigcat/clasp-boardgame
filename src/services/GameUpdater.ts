@@ -1,6 +1,9 @@
 /**
  * A Games row with column A kept as rich text and columns B through AA kept as
  * mutable cell values.
+ *
+ * Splitting the link from the value columns is required because Apps Script's
+ * `getValues` / `setValues` APIs do not round-trip hyperlink formatting.
  */
 interface GameSheetRow {
   /** Rich-text link in column A, or null when the sheet row is empty. */
@@ -26,6 +29,9 @@ type PlayerRecommendations = Record<string, string>;
 
 /**
  * Tracks work consumed by the current Apps Script invocation.
+ *
+ * The batch size is enforced through this counter rather than by slicing the
+ * sorted list up front so skipped fresh rows do not consume quota slots.
  */
 interface GameBatchProgress {
   /** Number of source rows attempted in this invocation. */
@@ -34,10 +40,16 @@ interface GameBatchProgress {
 
 /**
  * Updates BoardGameGeek metadata in bounded batches.
+ *
+ * Each invocation refreshes only stale rows, oldest first, then reports whether
+ * more work remains so the coordinator can keep or advance the queue phase.
  */
 class GameUpdater {
   /**
    * Updates one batch of stale game rows and reports whether work remains.
+   *
+   * Returns false when the Games sheet is missing or every linked row is still
+   * within the refresh window, signaling the coordinator to move to Titles.
    */
   static run(): boolean {
     const sheet = findSheet(SHEET_NAMES.GAMES);
@@ -73,7 +85,9 @@ class GameUpdater {
    * Loads contiguous game rows, stopping at the first empty rich-text link.
    *
    * The sheet intentionally uses a blank link as its end marker, so trailing
-   * empty rows must never be written back as data.
+   * empty rows must never be written back as data. Column AA is read separately
+   * because Apps Script range strings treat `$B$2:$Z` and `$AA$2:$AA` as
+   * distinct spans that together cover the managed value columns.
    */
   private static loadRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -97,6 +111,9 @@ class GameUpdater {
 
   /**
    * Writes columns B through AA for every managed game row in one operation.
+   *
+   * Column A is omitted on purpose so BoardGameGeek hyperlinks are not replaced
+   * by plain-text URLs during the batch flush.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -129,6 +146,9 @@ class GameUpdater {
 
   /**
    * Determines whether a row can be fetched again under the refresh policy.
+   *
+   * Rows without a hyperlink are ownership markers or blanks and are never
+   * queued for BoardGameGeek requests.
    */
   private static needsRefresh(row: GameSheetRow, current: Date): boolean {
     const gameUrl = row.gameLink?.getLinkUrl() ?? null;
@@ -149,6 +169,9 @@ class GameUpdater {
 
   /**
    * Returns a valid last-update timestamp, treating malformed values as stale.
+   *
+   * Non-Date cell contents are ignored so a corrupted timestamp cannot block
+   * refresh forever; the row becomes eligible on the next batch.
    */
   private static getLastUpdatedAt(row: GameSheetRow): Date | null {
     const value = row.values[GAME_VALUE_COLUMN.LAST_UPDATED_AT];
@@ -157,6 +180,9 @@ class GameUpdater {
 
   /**
    * Sorts rows so the least recently refreshed games receive the next batch.
+   *
+   * Never-updated rows sort first (timestamp treated as epoch) so new links
+   * added to the sheet are prioritized over recently failed retries.
    */
   private static sortByOldestUpdate(
     rows: readonly GameSheetRow[],
@@ -195,6 +221,8 @@ class GameUpdater {
       GameUpdater.applyGameItem(row, gameItem, gameReference.id, current);
       GameUpdater.clearArrayFormulaInputs(row);
     } catch (error: unknown) {
+      // Row-level failures must not abort the batch; the error is recorded and
+      // the next eligible game continues in the same invocation.
       GameUpdater.recordFailure(row, gameUrl, error, current);
     }
   }
@@ -214,6 +242,9 @@ class GameUpdater {
 
   /**
    * Extracts the BoardGameGeek resource type and ID from an absolute game URL.
+   *
+   * Paths look like `/boardgame/12345/title`; type and ID are the first two
+   * segments and are enough to call the thing API.
    */
   private static parseGameReference(
     gameUrl: string,
@@ -255,6 +286,8 @@ class GameUpdater {
 
   /**
    * Builds the BoardGameGeek thing endpoint for one resource.
+   *
+   * `stats=1` is required so ranks, averages, and weight are present in the XML.
    */
   private static buildThingEndpoint(
     gameReference: BoardGameGeekGameReference,
@@ -266,6 +299,9 @@ class GameUpdater {
 
   /**
    * Copies parsed BoardGameGeek values into their spreadsheet columns.
+   *
+   * Success clears the previous error cell and stamps the shared batch time so
+   * the refresh window starts from this attempt.
    */
   private static applyGameItem(
     row: GameSheetRow,
@@ -283,6 +319,7 @@ class GameUpdater {
       'ratings',
     );
     const ranks = getRequiredXmlChild(ratings, 'ranks');
+    // Prefer the overall board-game rank over family-specific rank entries.
     const boardGameRank = findXmlElementByAttribute(
       ranks.getChildren('rank'),
       'name',
@@ -327,6 +364,9 @@ class GameUpdater {
   /**
    * Reads preferred player counts from the BoardGameGeek poll and applies known
    * per-game corrections.
+   *
+   * For each player count, the result with the most votes wins. Overrides are
+   * applied last so curated corrections beat the raw community poll.
    */
   private static getPlayerRecommendations(
     gameItem: XmlElement,
@@ -360,6 +400,9 @@ class GameUpdater {
 
   /**
    * Writes recommendations for the player counts represented in the sheet.
+   *
+   * Missing poll entries become blanks rather than guessed labels so the sheet
+   * does not invent recommendations BoardGameGeek never provided.
    */
   private static writePlayerRecommendations(
     row: GameSheetRow,

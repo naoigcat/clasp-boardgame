@@ -1,8 +1,10 @@
 /**
  * Exact title substitutions applied after generic title normalization.
  *
- * These exceptions encode known naming differences between the source sites
- * and the titles used by the spreadsheet, keeping the normalizer deterministic.
+ * Board Game Arena and Bodoge often use marketing or edition-specific spellings
+ * that differ from the canonical names already used in the spreadsheet. These
+ * deterministic aliases keep matching stable without requiring sheet edits each
+ * time a source renames a title.
  */
 const TITLE_NORMALIZATION_ALIASES: Readonly<Record<string, string>> = {
   'テラフォーミング・マーズ': 'テラフォーミングマーズ',
@@ -27,6 +29,9 @@ const TITLE_NORMALIZATION_ALIASES: Readonly<Record<string, string>> = {
 
 /**
  * Prefix substitutions that apply to a family of related titles.
+ *
+ * Series entries share a prefix but keep their distinctive suffixes, so a
+ * prefix rewrite avoids enumerating every expansion as an exact alias.
  */
 const TITLE_NORMALIZATION_PREFIX_ALIASES: Readonly<Record<string, string>> = {
   'チケット・トゥ・ライド': 'チケットトゥライド',
@@ -34,7 +39,8 @@ const TITLE_NORMALIZATION_PREFIX_ALIASES: Readonly<Record<string, string>> = {
 
 /**
  * Bodoge title substitutions. One source title can intentionally become more
- * than one rating row when it represents a bundled product.
+ * than one rating row when it represents a bundled product that the spreadsheet
+ * tracks as separate games.
  */
 const RATING_TITLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   '#hashtag': ['ハッシュタグ'],
@@ -54,6 +60,10 @@ const EXCLUDED_RATING_TITLES: readonly string[] = [
 
 /**
  * Game-specific player-count recommendations that correct known upstream data.
+ *
+ * BoardGameGeek polls are community-voted and occasionally disagree with how a
+ * game is actually played. Overrides are keyed by BoardGameGeek ID so they
+ * survive title renames.
  */
 const GAME_PLAYER_COUNT_OVERRIDES: Readonly<
   Record<string, Readonly<Record<string, string>>>

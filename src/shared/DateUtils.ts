@@ -1,8 +1,8 @@
 /**
  * Returns a new date offset by the specified number of calendar days.
  *
- * The input is never mutated because spreadsheet values can be reused while a
- * batch is being evaluated.
+ * The input is never mutated because spreadsheet Date values can be reused
+ * while a batch is being evaluated; mutating them would corrupt later writes.
  */
 function addDays(date: Date, days: number): Date {
   const result = new Date(date.getTime());
@@ -12,6 +12,9 @@ function addDays(date: Date, days: number): Date {
 
 /**
  * Determines whether a timestamp remains within a refresh window.
+ *
+ * Used by Games to skip BoardGameGeek rows that were attempted recently enough
+ * that another fetch would waste quota without improving freshness.
  */
 function isWithinRefreshWindow(
   timestamp: Date,

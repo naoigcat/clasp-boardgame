@@ -1,3 +1,9 @@
+/**
+ * RankingUpdater catalog import tests.
+ *
+ * Exercises embedded JSON parsing, ignored implementation tags, player-count
+ * boolean columns, and refusing to clear Rankings when the catalog is empty.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
