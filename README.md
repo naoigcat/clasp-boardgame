@@ -154,10 +154,9 @@ format change.
 - Rankings are cleared only after a non-empty catalog has been fetched and
   parsed, preserving the last snapshot when the request or catalog parser
   fails.
-- A request failure while Bodoge pages are being fetched occurs before Ratings
-  is cleared. However, an unrecognized Bodoge page is currently treated as the
-  end of the list, so verify the imported row count after that source changes
-  its HTML.
+- A request failure or unrecognized Bodoge page occurs before Ratings is
+  cleared, preserving the last snapshot. Pagination ends only when Bodoge's
+  empty played-games marker is present.
 - For logged BoardGameGeek, title, or Board Game Arena catalog failures, inspect
   the Apps Script execution log and update the relevant parser or title rule
   before rerunning the update.
