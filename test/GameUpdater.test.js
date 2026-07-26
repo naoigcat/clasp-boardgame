@@ -207,10 +207,64 @@ test('GameUpdater preserves formula inputs when a game refresh fails', () => {
     },
   });
 
-  assert.equal(context.GameUpdater.run(), true);
+  assert.equal(context.GameUpdater.run(), false);
 
   assert.deepEqual(
     getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
     getArrayFormulaInputs(row.values),
+  );
+  assert.ok(
+    gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
+  );
+});
+
+test('GameUpdater advances past permanently failing head rows on the next batch', () => {
+  const failingRows = Array.from({ length: 50 }, (_, index) =>
+    createGameRow(index, 'not-a-boardgamegeek-url'),
+  );
+  const successRow = createGameRow(
+    50,
+    'https://boardgamegeek.com/boardgame/42',
+  );
+  const rows = [...failingRows, successRow];
+  const gamesSheet = createGamesSheet(rows);
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => ({});
+  context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+  };
+
+  assert.equal(context.GameUpdater.run(), true);
+  assert.deepEqual(
+    getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
+    getArrayFormulaInputs(successRow.values),
+  );
+
+  // The sheet double reads from the source row objects, so persist the first
+  // batch write before asserting that the next batch can move past failures.
+  gamesSheet.writes[0].values.forEach((values, index) => {
+    rows[index].values = values;
+  });
+  gamesSheet.writes.length = 0;
+
+  assert.equal(context.GameUpdater.run(), false);
+  assert.deepEqual(
+    getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
+    Array(5).fill(''),
   );
 });

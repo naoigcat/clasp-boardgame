@@ -30,7 +30,7 @@ Apps Script execution:
 2. The coordinator saves the Games phase and creates one five-minute,
    time-driven trigger.
 3. Each trigger execution refreshes at most 50 stale BoardGameGeek game rows.
-   A game is stale when it has never been updated or its last successful update
+   A game is stale when it has never been updated or its last update attempt
    is seven days old or older.
 4. Once Games is complete, each subsequent execution normalizes at most 100
    Board Game Arena titles.
@@ -146,11 +146,12 @@ format change.
 
 ## Failure handling
 
-- A failed BoardGameGeek game lookup records its message in that Games row and
-  keeps its last-success timestamp unchanged, allowing a later trigger to
-  retry it.
-- A failed title lookup records its message in Titles and leaves the canonical
-  title blank, which also makes the row eligible for a later retry.
+- A failed BoardGameGeek game lookup records its message and advances the row's
+  attempt timestamp so later batches can refresh other stale games. The same
+  refresh window later makes the failed row eligible again.
+- A failed title lookup records its message and leaves the canonical title
+  blank. Later batches prefer titles that have not yet failed so the queue can
+  advance; a retry pass runs once only failed rows remain.
 - Rankings are cleared only after a non-empty catalog has been fetched and
   parsed, preserving the last snapshot when the request or catalog parser
   fails.
