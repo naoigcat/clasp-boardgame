@@ -168,6 +168,42 @@ test('TitleUpdater handles a source-specific title that needs no generic cleanup
   );
 });
 
+test('TitleUpdater normalizes edition-only titles to an empty string', () => {
+  const context = loadTitleUpdater();
+
+  assert.equal(context.TitleUpdater.normalizeTitle('《新版》'), '');
+  assert.equal(context.TitleUpdater.normalizeTitle('第1版'), '');
+  assert.equal(context.TitleUpdater.normalizeTitle('-Deluxe-'), '');
+});
+
+test('TitleUpdater records empty normalization as an error and ends the preferred queue', () => {
+  const titleRows = [['https://example.com/empty-norm', '', '', '']];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('《新版》') }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // First pass records the empty normalization as a failure and schedules the
+  // one-shot retry pass used for other permanent title errors.
+  assert.equal(context.TitleUpdater.run(), true);
+
+  let written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written[0][TITLE_SOURCE_COLUMN], '《新版》');
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], '');
+  assert.equal(written[0][TITLE_ERROR_COLUMN], 'normalized title is empty');
+
+  titleRows.splice(0, titleRows.length, ...written);
+  sandbox.titlesSheet.writes.length = 0;
+
+  // Without recording an error, this row would stay preferred and run() would
+  // keep returning true, holding the shared trigger open indefinitely.
+  assert.equal(context.TitleUpdater.run(), false);
+  written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], '');
+  assert.equal(written[0][TITLE_ERROR_COLUMN], 'normalized title is empty');
+});
+
 test('TitleUpdater prefers unfailed title rows over permanently failing head rows', () => {
   const titleRows = [
     ['https://example.com/fail-1', '', '', 'previous error'],
