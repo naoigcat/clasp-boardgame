@@ -14,6 +14,14 @@ interface RatingPage {
 }
 
 /**
+ * Markup Bodoge renders for an empty played-games page or a page past the last
+ * result. Absence of both this marker and rating cards means the HTML is not a
+ * recognized ratings list page.
+ */
+const BODOGE_EMPTY_PLAYED_GAMES_MARKER =
+  '<p class="empty">検索結果が存在しないか、マイボードゲームが未登録のユーザーです</p>';
+
+/**
  * Imports a configured Bodoge user's played-game ratings.
  */
 class RatingUpdater {
@@ -56,7 +64,7 @@ class RatingUpdater {
   }
 
   /**
-   * Fetches and combines Bodoge pages until the first page without game cards.
+   * Fetches and combines Bodoge pages until the first explicit empty page.
    */
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
@@ -90,6 +98,9 @@ class RatingUpdater {
 
   /**
    * Parses rating cards from one Bodoge page.
+   *
+   * Pages without cards must include Bodoge's empty-list marker; otherwise the
+   * HTML is treated as unrecognized so callers can keep the prior snapshot.
    */
   private static parsePage(pageHtml: string): RatingPage {
     const cards =
@@ -108,7 +119,15 @@ class RatingUpdater {
       });
     });
 
-    return { hasCards: cards.length > 0, rows };
+    if (cards.length > 0) {
+      return { hasCards: true, rows };
+    }
+
+    if (pageHtml.includes(BODOGE_EMPTY_PLAYED_GAMES_MARKER)) {
+      return { hasCards: false, rows: [] };
+    }
+
+    throw new Error('Unrecognized Bodoge ratings page HTML');
   }
 
   /**

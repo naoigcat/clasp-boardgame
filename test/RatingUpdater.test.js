@@ -83,6 +83,13 @@ function ratingCard(title, rating) {
   ].join('');
 }
 
+/**
+ * Markup Bodoge uses for an empty played-games page or a page past the last result.
+ */
+function emptyPlayedGamesPage() {
+  return '<p class="empty">検索結果が存在しないか、マイボードゲームが未登録のユーザーです</p>';
+}
+
 test('RatingUpdater writes aliased ratings without clearing a header-only sheet', () => {
   const ratingsSheet = createSheet('Ratings', 1);
   const sandbox = createRatingSandbox({
@@ -90,7 +97,7 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('#hashtag', '4') },
-      { status: 200, body: '' },
+      { status: 200, body: emptyPlayedGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -122,5 +129,67 @@ test('RatingUpdater leaves the Ratings sheet untouched without a configured user
   context.RatingUpdater.run();
 
   assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when Bodoge HTML is unrecognized', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: '<html><body>login required</body></html>' },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Unrecognized Bodoge ratings page HTML/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when a later Bodoge page is unrecognized', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: '<html><body>maintenance</body></html>' },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Unrecognized Bodoge ratings page HTML/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [{ status: 200, body: emptyPlayedGamesPage() }],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), [
+    {
+      type: 'clearContent',
+      row: 2,
+      column: 1,
+      numRows: 2,
+      numColumns: 2,
+    },
+  ]);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
