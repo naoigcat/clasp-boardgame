@@ -146,6 +146,14 @@ const BODOGE_CONFIG = {
   PLAYED_GAMES_URL_SUFFIX: '/boardgames/played?page=',
   /** Delay between pages to avoid burst requests to the source site. */
   REQUEST_DELAY_MILLISECONDS: 1000,
+  /**
+   * Hard stop for ratings pagination.
+   *
+   * Bodoge should eventually return its empty-list marker, but a stuck or
+   * repeating card page must not consume the entire Apps Script runtime and
+   * block Games/Titles trigger creation in the same update cycle.
+   */
+  MAX_PAGE_COUNT: 100,
 } as const;
 
 /**
