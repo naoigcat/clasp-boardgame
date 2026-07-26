@@ -49,12 +49,12 @@ Keep the following sheet names and a header row in row 1. The updater treats
 these tabs as an application data contract; renaming a tab or changing the
 managed column order requires a corresponding change in the configuration.
 
-| Sheet | Required input | How the updater manages it |
-| --- | --- | --- |
-| Games | A BoardGameGeek rich-text link in column A for each game | Reads rows until the first blank link, then refreshes the managed values in columns B through AA. Formula-dependent cells are cleared before values are rewritten so sheet formulas can recalculate from current data. |
-| Rankings | Header row only | Replaces rows below the header with the current Board Game Arena catalog. An empty parsed catalog leaves the previous snapshot untouched. |
-| Titles | Header row only; existing URL rows are preserved | Adds Board Game Arena URLs found in Rankings, stores the source Japanese title, its canonical matching title, and the most recent error. |
-| Ratings | Header row only | Replaces rows below the header with the configured Bodoge user's ratings after its pages have been fetched without a request error. |
+| Sheet    | Required input                                           | How the updater manages it                                                                                                                                                                                             |
+| -------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Games    | A BoardGameGeek rich-text link in column A for each game | Reads rows until the first blank link, then refreshes the managed values in columns B through AA. Formula-dependent cells are cleared before values are rewritten so sheet formulas can recalculate from current data. |
+| Rankings | Header row only                                          | Replaces rows below the header with the current Board Game Arena catalog. An empty parsed catalog leaves the previous snapshot untouched.                                                                              |
+| Titles   | Header row only; existing URL rows are preserved         | Adds Board Game Arena URLs found in Rankings, stores the source Japanese title, its canonical matching title, and the most recent error.                                                                               |
+| Ratings  | Header row only                                          | Replaces rows below the header with the configured Bodoge user's ratings after its pages have been fetched without a request error.                                                                                    |
 
 The exact column positions and batch limits are centralized in
 src/config/SheetSchema.ts and src/config/AppConfig.ts. Use those files when a
