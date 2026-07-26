@@ -47,8 +47,14 @@ function loadTitleUpdaterService(sandbox) {
 function createTitleSandbox({ titleRows, responses }) {
   const responseQueue = [...responses];
   const writes = [];
+  const clears = [];
   const titlesSheet = {
     writes,
+    clears,
+    getLastRow() {
+      // Header row plus every physical data row, including mid-sheet blanks.
+      return titleRows.length + 1;
+    },
     getRange(a1NotationOrRow, column, numRows, numColumns) {
       if (typeof a1NotationOrRow === 'string') {
         return {
@@ -59,6 +65,14 @@ function createTitleSandbox({ titleRows, responses }) {
       }
 
       return {
+        clearContent() {
+          clears.push({
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          });
+        },
         setValues(values) {
           writes.push({
             row: a1NotationOrRow,
@@ -212,4 +226,30 @@ test('TitleUpdater retries failed titles once when only failures remain', () => 
   assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/retry');
   assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+});
+
+test('TitleUpdater clears surplus Titles rows after compacting mid-sheet blanks', () => {
+  const titleRows = [
+    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['', '', '', ''],
+    ['https://example.com/b', '', '', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('カルカソンヌ') }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  assert.equal(context.TitleUpdater.run(), false);
+
+  // Without clearing the prior three-row used range, compacted url B would
+  // remain at its old physical row and appear twice after the rewrite.
+  assert.deepEqual(sandbox.titlesSheet.clears, [
+    { row: 2, column: 1, numRows: 3, numColumns: 4 },
+  ]);
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written.length, 2);
+  assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/a');
+  assert.equal(written[1][TITLE_URL_COLUMN], 'https://example.com/b');
+  assert.equal(written[1][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
 });
