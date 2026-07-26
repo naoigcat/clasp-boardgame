@@ -31,36 +31,49 @@ const SHEET_LAYOUT = {
  * Derived columns are owned by spreadsheet array formulas. The updater clears
  * them after a successful refresh so those formulas recalculate from the new
  * BoardGameGeek metadata instead of retaining stale manual values.
+ *
+ * Recommendation columns cover players 2–10 only. Rank and later metadata
+ * columns follow immediately so they stay aligned with the real sheet layout.
  */
 const GAME_VALUE_COLUMN = {
-  /** Array-formula input that resolves the display title for the row. */
+  /** Column C: array-formula input that resolves the display title for the row. */
   DERIVED_TITLE: 1,
-  /** Array-formula input that resolves the preferred player-count summary. */
+  /**
+   * Column F: array-formula input that resolves the preferred player-count
+   * summary.
+   */
   DERIVED_PLAYER_COUNT: 4,
-  /** First recommendation column; offset 0 means two players. */
+  /**
+   * Column I: first recommendation column; offset 0 means two players and
+   * offset 8 (column Q) means ten players.
+   */
   PLAYER_RECOMMENDATION_START: 7,
-  /** BoardGameGeek's overall board-game rank. */
+  /** Column R: BoardGameGeek's overall board-game rank. */
   BOARD_GAME_RANK: 16,
-  /** BoardGameGeek's Bayesian average rating. */
+  /** Column S: BoardGameGeek's Bayesian average rating. */
   BAYES_AVERAGE: 17,
-  /** BoardGameGeek's average complexity weight. */
+  /** Column T: BoardGameGeek's average complexity weight. */
   AVERAGE_WEIGHT: 18,
-  /** Formatted minimum and maximum play time. */
+  /** Column U: formatted minimum and maximum play time. */
   PLAY_TIME: 19,
-  /** BoardGameGeek's publication year. */
+  /** Column V: BoardGameGeek's publication year. */
   PUBLICATION_YEAR: 20,
-  /** Array-formula input that joins the row to Rankings data. */
+  /** Column W: array-formula input that joins the row to Rankings data. */
   DERIVED_RANKING: 21,
-  /** Array-formula input that joins the row to Ratings data. */
+  /** Column X: array-formula input that joins the row to Ratings data. */
   DERIVED_RATING: 22,
-  /** Array-formula input that joins the row to Titles matching. */
+  /** Column Y: array-formula input that joins the row to Titles matching. */
   DERIVED_TITLE_MATCH: 23,
   /**
-   * Timestamp of the last BoardGameGeek update attempt. Advanced on failure as
-   * well as success so permanent errors rotate out of the oldest-first queue.
+   * Column Z: timestamp of the last BoardGameGeek update attempt. Advanced on
+   * failure as well as success so permanent errors rotate out of the
+   * oldest-first queue.
    */
   LAST_UPDATED_AT: 24,
-  /** Latest fetch or parsing error shown beside the game for troubleshooting. */
+  /**
+   * Column AA: latest fetch or parsing error shown beside the game for
+   * troubleshooting.
+   */
   ERROR_MESSAGE: 25,
 } as const;
 

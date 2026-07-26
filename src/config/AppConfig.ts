@@ -93,10 +93,11 @@ const BOARD_GAME_GEEK_CONFIG = {
   /** Lowest player count represented by the spreadsheet's recommendation columns. */
   MIN_SUPPORTED_PLAYER_COUNT: 2,
   /**
-   * Consecutive player-count columns written beside that minimum. The sheet
-   * layout expects this many recommendation cells before rank and rating fields.
+   * Consecutive player-count columns written beside that minimum. Matches the
+   * spreadsheet's 2–10 layout and Rankings' supported counts; there is no
+   * eleventh-player recommendation column.
    */
-  SUPPORTED_PLAYER_COUNT_TOTAL: 10,
+  SUPPORTED_PLAYER_COUNT_TOTAL: 9,
   /** Delay between requests so retries cannot burst during an upstream outage. */
   REQUEST_DELAY_MILLISECONDS: 2000,
 } as const;
