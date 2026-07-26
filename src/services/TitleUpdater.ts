@@ -155,6 +155,8 @@ class TitleUpdater {
    * Fetches a missing source title and stores either its canonical title or the
    * error that should be visible to spreadsheet users. Leaving the canonical
    * title blank keeps the row eligible for a later retry after source recovery.
+   * An empty normalization result is also an error: clearing the error while
+   * leaving the canonical title blank would keep the row preferred forever.
    */
   private static updateRow(row: TitleSheetRow): void {
     const gameUrl = String(row[TITLE_COLUMN.URL]);
@@ -171,9 +173,17 @@ class TitleUpdater {
         return;
       }
 
-      row[TITLE_COLUMN.NORMALIZED_TITLE] = TitleUpdater.normalizeTitle(
+      const normalizedTitle = TitleUpdater.normalizeTitle(
         String(row[TITLE_COLUMN.SOURCE_TITLE]),
       );
+      if (!normalizedTitle) {
+        // Generic cleanup can strip every token from edition-only titles.
+        // Record the failure instead of treating blank as a successful write.
+        row[TITLE_COLUMN.ERROR_MESSAGE] = 'normalized title is empty';
+        return;
+      }
+
+      row[TITLE_COLUMN.NORMALIZED_TITLE] = normalizedTitle;
       row[TITLE_COLUMN.ERROR_MESSAGE] = '';
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
