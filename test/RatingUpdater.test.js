@@ -63,7 +63,7 @@ function createRatingSandbox({ ratingsSheet, userId, responses }) {
  */
 function loadRatingUpdater(sandbox) {
   return loadScripts(sandbox, [
-    { path: 'src/config/AppConfig.ts', exports: [] },
+    { path: 'src/config/AppConfig.ts', exports: ['BODOGE_CONFIG'] },
     { path: 'src/config/SheetSchema.ts', exports: [] },
     { path: 'src/config/TitleRules.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
@@ -197,5 +197,29 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
       numColumns: 2,
     },
   ]);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when Bodoge keeps returning rating cards past the page cap', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const maxPageCount = 100;
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    // One response per allowed page, all with cards and no empty marker, so the
+    // import must stop on the page cap instead of looping until runtime expires.
+    responses: Array.from({ length: maxPageCount }, (_, index) => ({
+      status: 200,
+      body: ratingCard(`ゲーム${index + 1}`, '3'),
+    })),
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.equal(context.BODOGE_CONFIG.MAX_PAGE_COUNT, maxPageCount);
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings pagination exceeded 100 pages/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });

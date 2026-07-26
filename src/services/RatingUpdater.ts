@@ -72,13 +72,18 @@ class RatingUpdater {
   /**
    * Fetches and combines Bodoge pages until the first explicit empty page.
    *
-   * Pagination stops on Bodoge's empty-list marker rather than on an arbitrary
-   * page count so accounts with many played games are fully imported.
+   * Pagination normally ends on Bodoge's empty-list marker. A page cap aborts
+   * runaway card responses so this import cannot exhaust the Apps Script
+   * runtime before the rest of the update cycle schedules Games/Titles work.
    */
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
 
-    for (let pageNumber = 1; ; pageNumber += 1) {
+    for (
+      let pageNumber = 1;
+      pageNumber <= BODOGE_CONFIG.MAX_PAGE_COUNT;
+      pageNumber += 1
+    ) {
       const response = HttpClient.get(
         RatingUpdater.buildPageUrl(userId, pageNumber),
       );
@@ -94,6 +99,11 @@ class RatingUpdater {
       rows.push(...page.rows);
       Utilities.sleep(BODOGE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
+
+    // Abort without writing so the previous complete Ratings snapshot remains.
+    throw new Error(
+      `Bodoge ratings pagination exceeded ${BODOGE_CONFIG.MAX_PAGE_COUNT} pages`,
+    );
   }
 
   /**
