@@ -1,5 +1,8 @@
 /**
  * Shared HTTP client for external board-game services.
+ *
+ * Centralizing UrlFetchApp usage makes optional auth headers and future request
+ * defaults consistent across BoardGameGeek, Board Game Arena, and Bodoge.
  */
 class HttpClient {
   /**
@@ -15,8 +18,9 @@ class HttpClient {
   /**
    * Fetches a URL and adds a Bearer token when one has been configured.
    *
-   * Callers can still work without a token, while installations with one avoid
-   * the stricter anonymous limits imposed by BoardGameGeek.
+   * BoardGameGeek allows anonymous access but applies stricter rate limits.
+   * Callers still work without a token; installations with one avoid those
+   * anonymous ceilings without changing call sites.
    */
   static getWithOptionalBearerToken(
     url: string,

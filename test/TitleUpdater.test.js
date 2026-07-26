@@ -1,8 +1,15 @@
+/**
+ * TitleUpdater normalization and batch-ordering tests.
+ *
+ * Pure spelling rules are loaded without Apps Script doubles; run() scenarios
+ * cover Rankings URL intake, failed-row deferral, and the final retry pass.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { loadScripts } = require('./helpers/appScriptHarness');
 
+/** Titles sheet column indexes mirrored from SheetSchema for assertions. */
 const TITLE_URL_COLUMN = 0;
 const TITLE_SOURCE_COLUMN = 1;
 const TITLE_NORMALIZED_COLUMN = 2;

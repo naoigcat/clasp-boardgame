@@ -10,9 +10,12 @@ interface BoardGameArenaTag {
 
 /**
  * Board Game Arena game metadata required by the Rankings sheet.
+ *
+ * Only fields that map to spreadsheet columns are retained; the catalog embed
+ * contains additional properties that this project intentionally ignores.
  */
 interface BoardGameArenaGame {
-  /** URL-safe Board Game Arena game name. */
+  /** URL-safe Board Game Arena game name used in the panel URL. */
   readonly name: string;
   /** Numeric tag IDs attached to the game. */
   readonly tagIds: readonly number[];
@@ -33,6 +36,10 @@ type RankingSheetRow = Array<string | number | boolean | null>;
 
 /**
  * Imports Board Game Arena's current game catalog into the Rankings sheet.
+ *
+ * The sheet is a replaceable snapshot: Titles reads its URLs, and Games formulas
+ * can join against its columns. An empty parse leaves the previous snapshot so
+ * a temporary site change cannot wipe the catalog.
  */
 class RankingUpdater {
   /**
@@ -69,6 +76,9 @@ class RankingUpdater {
 
   /**
    * Parses the embedded catalog and maps it to spreadsheet rows.
+   *
+   * Tag names and games arrive as separate JSON arrays; tags are resolved after
+   * both are validated so a partial parse cannot write half-built rows.
    */
   private static parseRows(page: string): RankingSheetRow[] {
     try {
@@ -100,6 +110,9 @@ class RankingUpdater {
 
   /**
    * Converts a parsed JSON value into validated tag metadata.
+   *
+   * Runtime validation is required because the embed is untyped page source,
+   * not a versioned API schema.
    */
   private static toTag(value: unknown): BoardGameArenaTag {
     const record = RankingUpdater.requireRecord(value, 'game tag');
@@ -138,6 +151,9 @@ class RankingUpdater {
 
   /**
    * Builds a Rankings row from one validated Board Game Arena game.
+   *
+   * Column B is left null for spreadsheet-side formulas. Boolean player-count
+   * columns follow the configured 2–10 layout rather than the source's raw list.
    */
   private static toSheetRow(
     game: BoardGameArenaGame,
@@ -230,6 +246,9 @@ class RankingUpdater {
 
   /**
    * Requires Board Game Arena's nested tag tuples and returns their IDs.
+   *
+   * The embed stores tags as `[id, ...]` tuples; only the ID is needed once
+   * display names have been loaded from `game_tags`.
    */
   private static requireTagIds(
     record: Readonly<Record<string, unknown>>,

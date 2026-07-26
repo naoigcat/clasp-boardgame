@@ -1,3 +1,9 @@
+/**
+ * UpdateCoordinator queue lifecycle tests.
+ *
+ * Covers lock skipping, menu-driven restarts, Games-to-Titles phase transitions,
+ * and cleanup of the shared trigger when the queued work finishes.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 

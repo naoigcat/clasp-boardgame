@@ -1,3 +1,10 @@
+/**
+ * Shared doubles and loaders for Node-based Apps Script unit tests.
+ *
+ * Production sources are global TypeScript files without imports. Tests compile
+ * them with `module: None` and evaluate them in a vm sandbox that supplies only
+ * the Apps Script services each scenario needs.
+ */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -83,6 +90,9 @@ function createSheet(name, lastRow) {
 
 /**
  * Creates a minimal Apps Script sandbox with queued HTTP responses.
+ *
+ * Responses are consumed in fetch order so tests can assert both the number of
+ * upstream calls and the sheet writes that follow a successful parse.
  */
 function createSandbox({ sheets, responses }) {
   const responseQueue = [...responses];
@@ -140,6 +150,9 @@ function loadRankings(sandbox) {
 
 /**
  * Builds the embedded JSON fragment expected from Board Game Arena's page.
+ *
+ * Only the property names and surrounding punctuation matter to the HTML
+ * extractor; wrapping them in a larger page would not change parser behavior.
  */
 function rankingPage(games, tags) {
   return [

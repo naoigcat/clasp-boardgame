@@ -5,11 +5,17 @@ type XmlElement = GoogleAppsScript.XML_Service.Element;
 
 /**
  * Numeric value displayed when BoardGameGeek omits a usable number.
+ *
+ * The API uses the literal string "N/A" for missing ranks and similar fields;
+ * preserving that token avoids inventing zeros that would look like real data.
  */
 type NumericDisplayValue = number | 'N/A';
 
 /**
  * Returns a required child element or raises a descriptive parsing error.
+ *
+ * BoardGameGeek responses are expected to contain a fixed shape. Failing early
+ * with the missing child name is easier to diagnose than a later null dereference.
  */
 function getRequiredXmlChild(parent: XmlElement, childName: string): XmlElement {
   const child = parent.getChild(childName);
@@ -35,6 +41,9 @@ function getRequiredXmlAttributeValue(
 
 /**
  * Finds the first element whose named attribute equals the requested value.
+ *
+ * Used for polls and ranks that appear as sibling elements distinguished only
+ * by attributes such as `name="boardgame"`.
  */
 function findXmlElementByAttribute(
   elements: readonly XmlElement[],
@@ -55,6 +64,9 @@ function findXmlElementByAttribute(
 
 /**
  * Sorts XML elements by a numeric attribute in descending order.
+ *
+ * BoardGameGeek player-count polls store vote totals on each result. The
+ * highest vote count is treated as the community preference for that count.
  */
 function sortXmlElementsByNumericAttribute(
   elements: readonly XmlElement[],

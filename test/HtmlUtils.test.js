@@ -1,3 +1,9 @@
+/**
+ * HtmlUtils embedded-JSON extraction tests.
+ *
+ * Guards the bracket-matching parser against quoted brackets that would break a
+ * greedy regular expression over Board Game Arena page source.
+ */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 

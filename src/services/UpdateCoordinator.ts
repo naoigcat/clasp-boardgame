@@ -1,5 +1,9 @@
 /**
  * Coordinates synchronous and batched spreadsheet updates through one trigger.
+ *
+ * Rankings and Ratings usually fit in the menu execution. Games and Titles are
+ * paced across later trigger runs so UrlFetch delays and Apps Script time limits
+ * do not abort a full refresh. All paths share one lock and one handler name.
  */
 class UpdateCoordinator {
   /**
@@ -21,6 +25,8 @@ class UpdateCoordinator {
       if (isScheduledExecution) {
         UpdateCoordinator.resumePendingPhase();
       } else {
+        // A menu click always restarts: prior queue state and its trigger are
+        // discarded so users get a fresh Rankings/Ratings snapshot immediately.
         UpdateCoordinator.startNewUpdate();
       }
     } finally {
@@ -30,6 +36,9 @@ class UpdateCoordinator {
 
   /**
    * Performs work that fits in one execution and schedules the first batch.
+   *
+   * Fast sheet replacements run first; the Games phase is persisted before the
+   * trigger is created so a trigger that fires early still knows what to do.
    */
   private static startNewUpdate(): void {
     UpdateCoordinator.removeSupersededTriggers();
@@ -75,6 +84,9 @@ class UpdateCoordinator {
 
   /**
    * Continues BoardGameGeek batches and switches to titles when they finish.
+   *
+   * `GameUpdater.run` returns true while stale rows remain so the same phase
+   * key is reused. Switching only after false avoids starting Titles early.
    */
   private static resumeGamesPhase(): void {
     if (!GameUpdater.run()) {
@@ -96,6 +108,9 @@ class UpdateCoordinator {
 
   /**
    * Removes transient state and the shared trigger after all work completes.
+   *
+   * Without this cleanup the five-minute trigger would keep firing with no
+   * useful phase and waste project quota.
    */
   private static finishUpdate(): void {
     ScriptPropertyStore.remove(UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY);
@@ -104,6 +119,9 @@ class UpdateCoordinator {
 
   /**
    * Retires old per-service triggers before a new unified queue is created.
+   *
+   * Also clears the current unified handler so a restart does not stack a
+   * second schedule on top of the previous cycle.
    */
   private static removeSupersededTriggers(): void {
     LEGACY_UPDATE_HANDLER_NAMES.forEach((handlerName) => {

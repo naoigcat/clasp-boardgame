@@ -16,13 +16,16 @@ interface RatingPage {
 /**
  * Markup Bodoge renders for an empty played-games page or a page past the last
  * result. Absence of both this marker and rating cards means the HTML is not a
- * recognized ratings list page.
+ * recognized ratings list page, so the import aborts instead of clearing Ratings.
  */
 const BODOGE_EMPTY_PLAYED_GAMES_MARKER =
   '<p class="empty">検索結果が存在しないか、マイボードゲームが未登録のユーザーです</p>';
 
 /**
  * Imports a configured Bodoge user's played-game ratings.
+ *
+ * The sheet is replaced only after every page has been fetched successfully so
+ * a mid-import HTTP or HTML failure preserves the previous complete snapshot.
  */
 class RatingUpdater {
   /**
@@ -37,6 +40,8 @@ class RatingUpdater {
     const userId = ScriptPropertyStore.getOptionalValue(
       SCRIPT_PROPERTY_KEYS.BODOGE_USER_ID,
     );
+    // Without a configured user there is nothing to import; skip quietly so
+    // deployments that only use Rankings/Games still run the rest of update.
     if (userId === null || userId.length === 0) {
       return;
     }
@@ -44,6 +49,7 @@ class RatingUpdater {
     const rows = RatingUpdater.fetchAllRows(userId);
     // Fetch before clearing so a request failure on a later page preserves the
     // last complete ratings snapshot instead of publishing a partial import.
+    // Stable alphabetical order makes sheet diffs and formula lookups predictable.
     rows.sort(([firstTitle], [secondTitle]) =>
       firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
     );
@@ -65,6 +71,9 @@ class RatingUpdater {
 
   /**
    * Fetches and combines Bodoge pages until the first explicit empty page.
+   *
+   * Pagination stops on Bodoge's empty-list marker rather than on an arbitrary
+   * page count so accounts with many played games are fully imported.
    */
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
@@ -114,6 +123,7 @@ class RatingUpdater {
       }
 
       const rating = RatingUpdater.extractRating(card);
+      // Bundled products may expand into multiple spreadsheet titles.
       RatingUpdater.expandTitleAliases(sourceTitle).forEach((title) => {
         rows.push([title, rating]);
       });
@@ -132,6 +142,9 @@ class RatingUpdater {
 
   /**
    * Extracts and normalizes a Japanese title from one Bodoge rating card.
+   *
+   * Bodoge cards often include English/Japanese pairs, edition labels, and
+   * expansion markers that would break joins against the spreadsheet's titles.
    */
   private static extractSourceTitle(cardHtml: string): string | null {
     const titleMatch = cardHtml.match(
@@ -142,7 +155,9 @@ class RatingUpdater {
     }
 
     return titleMatch[1]
+      // Keep the Japanese segment when English and Japanese are slash-separated.
       .split('/')[0]
+      // Drop parenthetical notes that are not part of the canonical title.
       .replace(/（.*）/, '')
       .replace('：新版', '')
       .replace('（拡張）', '')
@@ -162,6 +177,9 @@ class RatingUpdater {
 
   /**
    * Expands a source title to its one or more canonical Ratings-sheet titles.
+   *
+   * Exclusions and aliases encode spreadsheet-specific naming decisions that
+   * Bodoge's catalog cannot express on its own.
    */
   private static expandTitleAliases(sourceTitle: string): readonly string[] {
     if (EXCLUDED_RATING_TITLES.includes(sourceTitle)) {
