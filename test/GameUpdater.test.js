@@ -14,6 +14,8 @@ const { loadScripts } = require('./helpers/appScriptHarness');
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [1, 4, 21, 22, 23];
 /** Zero-based Games value column that stores the last update attempt. */
 const GAME_LAST_UPDATED_AT_COLUMN = 24;
+/** Zero-based Games value column that stores the last row-level error. */
+const GAME_ERROR_MESSAGE_COLUMN = 25;
 /** Zero-based Games value column for the 10-player recommendation. */
 const GAME_TEN_PLAYER_RECOMMENDATION_COLUMN = 15;
 /** Zero-based Games value column for BoardGameGeek board-game rank. */
@@ -253,6 +255,27 @@ function loadGameUpdater(sandbox) {
   ]);
 }
 
+/**
+ * Loads GameUpdater with the HTTP client path used for BoardGameGeek fetches.
+ */
+function loadGameUpdaterWithHttp(sandbox) {
+  return loadScripts(sandbox, [
+    { path: 'src/config/AppConfig.ts', exports: [] },
+    { path: 'src/config/SheetSchema.ts', exports: [] },
+    { path: 'src/config/TitleRules.ts', exports: [] },
+    { path: 'src/shared/DateUtils.ts', exports: [] },
+    { path: 'src/shared/ErrorUtils.ts', exports: [] },
+    { path: 'src/shared/XmlUtils.ts', exports: [] },
+    { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
+    {
+      path: 'src/infrastructure/ScriptPropertyStore.ts',
+      exports: ['ScriptPropertyStore'],
+    },
+    { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/services/GameUpdater.ts', exports: ['GameUpdater'] },
+  ]);
+}
+
 test('GameUpdater treats a null rich-text value as the end of the Games data', () => {
   const gamesSheet = createEmptyGamesSheet();
   const context = loadGameUpdater({
@@ -402,4 +425,72 @@ test('GameUpdater writes 2–10 player recommendations and leaves board-game ran
   assert.equal(row.values[GAME_TEN_PLAYER_RECOMMENDATION_COLUMN], 'Best');
   assert.equal(row.values[GAME_BOARD_GAME_RANK_COLUMN], 42);
   assert.notEqual(row.values[GAME_BOARD_GAME_RANK_COLUMN], 'Recommended');
+});
+
+test('GameUpdater throttles before raising a non-2xx BoardGameGeek response', () => {
+  const row = createGameRow(0, 'https://boardgamegeek.com/boardgame/42');
+  const gamesSheet = createGamesSheet([row]);
+  const sleepCalls = [];
+  const context = loadGameUpdaterWithHttp({
+    Date,
+    Logger: {
+      log() {},
+    },
+    PropertiesService: {
+      getScriptProperties() {
+        return {
+          getProperty() {
+            return null;
+          },
+        };
+      },
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+    UrlFetchApp: {
+      fetch(url, options = {}) {
+        if (options.muteHttpExceptions !== true) {
+          throw new Error(`Request failed for ${url}: 503`);
+        }
+
+        return {
+          getResponseCode() {
+            return 503;
+          },
+          getContentText() {
+            return 'unavailable';
+          },
+        };
+      },
+    },
+    Utilities: {
+      sleep(milliseconds) {
+        sleepCalls.push(milliseconds);
+      },
+    },
+  });
+
+  assert.equal(context.GameUpdater.run(), false);
+
+  assert.deepEqual(sleepCalls, [
+    context.BOARD_GAME_GEEK_CONFIG.REQUEST_DELAY_MILLISECONDS,
+  ]);
+  assert.match(
+    gamesSheet.writes[0].values[0][GAME_ERROR_MESSAGE_COLUMN],
+    /^HTTP 503$/,
+  );
+  assert.deepEqual(
+    getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
+    getArrayFormulaInputs(row.values),
+  );
+  assert.ok(
+    gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
+  );
 });

@@ -112,9 +112,16 @@ function createTitleSandbox({ titleRows, responses }) {
       },
     },
     UrlFetchApp: {
-      fetch(url) {
+      fetch(url, options = {}) {
         const response = responseQueue.shift();
         assert.ok(response, `Unexpected fetch: ${url}`);
+        // Mirror UrlFetchApp: non-2xx throws unless muteHttpExceptions is set.
+        if (
+          (response.status < 200 || response.status >= 300) &&
+          options.muteHttpExceptions !== true
+        ) {
+          throw new Error(`Request failed for ${url}: ${response.status}`);
+        }
         return {
           getResponseCode() {
             return response.status;
