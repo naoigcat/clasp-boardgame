@@ -71,7 +71,13 @@ function createSheet(name, lastRow) {
 
       return {
         clearContent() {
-          calls.push({ type: 'clearContent', row, column, numRows, numColumns });
+          calls.push({
+            type: 'clearContent',
+            row,
+            column,
+            numRows,
+            numColumns,
+          });
         },
         setValues(values) {
           calls.push({
@@ -108,11 +114,19 @@ function createSandbox({ sheets, responses }) {
       },
     },
     UrlFetchApp: {
-      fetch(url) {
+      fetch(url, options = {}) {
         const response = responseQueue.shift();
         assert.ok(response, `Unexpected fetch: ${url}`);
         assert.equal(typeof response.status, 'number');
         assert.equal(typeof response.body, 'string');
+
+        // Mirror UrlFetchApp: non-2xx throws unless muteHttpExceptions is set.
+        if (
+          (response.status < 200 || response.status >= 300) &&
+          options.muteHttpExceptions !== true
+        ) {
+          throw new Error(`Request failed for ${url}: ${response.status}`);
+        }
 
         return {
           getResponseCode() {

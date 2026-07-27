@@ -7,12 +7,16 @@
 class HttpClient {
   /**
    * Fetches a URL with the supplied Apps Script request options.
+   *
+   * Always mutes HTTP exceptions so callers can inspect response codes and apply
+   * their own error handling or throttling. UrlFetchApp throws on non-2xx by
+   * default, which would skip those branches and skip post-fetch delays.
    */
   static get(
     url: string,
     options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
   ): GoogleAppsScript.URL_Fetch.HTTPResponse {
-    return UrlFetchApp.fetch(url, options);
+    return UrlFetchApp.fetch(url, { ...options, muteHttpExceptions: true });
   }
 
   /**
@@ -35,6 +39,10 @@ class HttpClient {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    return UrlFetchApp.fetch(url, { ...options, headers });
+    return UrlFetchApp.fetch(url, {
+      ...options,
+      headers,
+      muteHttpExceptions: true,
+    });
   }
 }
