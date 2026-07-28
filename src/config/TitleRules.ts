@@ -24,7 +24,6 @@ const TITLE_NORMALIZATION_ALIASES: Readonly<Record<string, string>> = {
   'アルハンブラ': 'アルハンブラの宮殿',
   'バニーキングダム': 'バニー・キングダム',
   'アイル・オブ・キャッツ ～ネコたちの楽園～': 'アイル・オブ・キャッツ',
-  'センチュリー：スパイスロード': 'センチュリー；ゴーレム',
 } as const;
 
 /**
