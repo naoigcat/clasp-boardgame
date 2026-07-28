@@ -192,6 +192,46 @@ test('TitleUpdater normalizes edition-only titles to an empty string', () => {
   assert.equal(context.TitleUpdater.normalizeTitle('-Deluxe-'), '');
 });
 
+test('TitleUpdater reports no remaining work when every title is already normalized', () => {
+  const titleRows = [
+    ['https://example.com/done', 'カタン', 'カタン', ''],
+    ['https://example.com/also-done', 'カルカソンヌ', 'カルカソンヌ', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // Incomplete determination must treat a blank pending count as done without
+  // fetching or rewriting Titles, matching countPendingRows in run().
+  assert.equal(context.TitleUpdater.run(), false);
+  assert.deepEqual(sandbox.titlesSheet.writes, []);
+  assert.deepEqual(sandbox.titlesSheet.operations, []);
+});
+
+test('TitleUpdater keeps the queue alive when only failed pending titles remain', () => {
+  const titleRows = [
+    ['https://example.com/ok', '', '', ''],
+    ['https://example.com/fail', '', '', 'previous error'],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('カタン') }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // After preferred rows finish, remaining failed pending rows must still
+  // count as incomplete so the shared trigger can run the one-shot retry pass.
+  assert.equal(context.TitleUpdater.run(), true);
+
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
+  assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+  assert.equal(written[1][TITLE_NORMALIZED_COLUMN], '');
+  assert.equal(written[1][TITLE_ERROR_COLUMN], 'previous error');
+});
+
 test('TitleUpdater records empty normalization as an error and ends the preferred queue', () => {
   const titleRows = [['https://example.com/empty-norm', '', '', '']];
   const sandbox = createTitleSandbox({
