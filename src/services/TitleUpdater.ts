@@ -110,15 +110,16 @@ class TitleUpdater {
    * Writes compacted title rows and clears any prior surplus physical rows.
    *
    * loadRows drops blank URL slots so the in-memory list is shorter than the
-   * sheet's previous used range. Clearing first prevents those abandoned cells
-   * from keeping duplicate URLs after the rewrite.
+   * sheet's previous used range. Writing first, then trimming only surplus rows,
+   * keeps existing Titles data intact if setValues fails and still prevents
+   * abandoned cells from keeping duplicate URLs after a successful rewrite.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     rows: TitleSheetRow[],
   ): void {
-    clearSheetDataRows(sheet, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
     if (rows.length === 0) {
+      clearSheetDataRows(sheet, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
       return;
     }
 
@@ -130,6 +131,11 @@ class TitleUpdater {
         SHEET_LAYOUT.TITLE_COLUMN_COUNT,
       )
       .setValues(rows);
+    clearSurplusSheetDataRows(
+      sheet,
+      rows.length,
+      SHEET_LAYOUT.TITLE_COLUMN_COUNT,
+    );
   }
 
   /**

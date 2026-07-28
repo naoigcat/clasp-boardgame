@@ -42,3 +42,31 @@ function clearSheetDataRows(
     )
     .clearContent();
 }
+
+/**
+ * Clears only rows below a just-written data block.
+ *
+ * Titles compaction drops blank URL slots, so abandoned physical rows must be
+ * trimmed. Clearing after setValues avoids a window where a failed rewrite
+ * would erase source titles and manual corrections that Rankings cannot restore.
+ */
+function clearSurplusSheetDataRows(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  writtenRowCount: number,
+  columnCount: number,
+): void {
+  const firstSurplusRow = SHEET_LAYOUT.FIRST_DATA_ROW + writtenRowCount;
+  const surplusRowCount = sheet.getLastRow() - firstSurplusRow + 1;
+  if (surplusRowCount <= 0) {
+    return;
+  }
+
+  sheet
+    .getRange(
+      firstSurplusRow,
+      SHEET_LAYOUT.DEFAULT_START_COLUMN,
+      surplusRowCount,
+      columnCount,
+    )
+    .clearContent();
+}

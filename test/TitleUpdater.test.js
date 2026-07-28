@@ -44,13 +44,15 @@ function loadTitleUpdaterService(sandbox) {
 /**
  * Creates Titles and Rankings sheet doubles around queued HTTP responses.
  */
-function createTitleSandbox({ titleRows, responses }) {
+function createTitleSandbox({ titleRows, responses, failOnSetValues = false }) {
   const responseQueue = [...responses];
   const writes = [];
   const clears = [];
+  const operations = [];
   const titlesSheet = {
     writes,
     clears,
+    operations,
     getLastRow() {
       // Header row plus every physical data row, including mid-sheet blanks.
       return titleRows.length + 1;
@@ -66,21 +68,28 @@ function createTitleSandbox({ titleRows, responses }) {
 
       return {
         clearContent() {
-          clears.push({
+          const clear = {
             row: a1NotationOrRow,
             column,
             numRows,
             numColumns,
-          });
+          };
+          clears.push(clear);
+          operations.push({ type: 'clearContent', ...clear });
         },
         setValues(values) {
-          writes.push({
+          if (failOnSetValues) {
+            throw new Error('setValues failed');
+          }
+          const write = {
             row: a1NotationOrRow,
             column,
             numRows,
             numColumns,
             values: JSON.parse(JSON.stringify(values)),
-          });
+          };
+          writes.push(write);
+          operations.push({ type: 'setValues', ...write });
         },
       };
     },
@@ -285,14 +294,44 @@ test('TitleUpdater clears surplus Titles rows after compacting mid-sheet blanks'
 
   assert.equal(context.TitleUpdater.run(), false);
 
-  // Without clearing the prior three-row used range, compacted url B would
-  // remain at its old physical row and appear twice after the rewrite.
+  // Write first so a failed setValues cannot wipe Titles, then trim only the
+  // abandoned physical row left by compacting out the blank URL slot.
+  assert.deepEqual(
+    sandbox.titlesSheet.operations.map((operation) => operation.type),
+    ['setValues', 'clearContent'],
+  );
   assert.deepEqual(sandbox.titlesSheet.clears, [
-    { row: 2, column: 1, numRows: 3, numColumns: 4 },
+    { row: 4, column: 1, numRows: 1, numColumns: 4 },
   ]);
   const written = sandbox.titlesSheet.writes[0].values;
   assert.equal(written.length, 2);
   assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/a');
   assert.equal(written[1][TITLE_URL_COLUMN], 'https://example.com/b');
   assert.equal(written[1][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
+});
+
+test('TitleUpdater leaves Titles intact when compacted setValues fails', () => {
+  const titleRows = [
+    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['', '', '', ''],
+    ['https://example.com/b', '', '', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('カルカソンヌ') }],
+    failOnSetValues: true,
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  assert.throws(() => context.TitleUpdater.run(), /setValues failed/);
+
+  // Clearing must not run after a write failure; otherwise source titles and
+  // manual corrections would disappear even though Rankings cannot restore them.
+  assert.deepEqual(sandbox.titlesSheet.operations, []);
+  assert.deepEqual(sandbox.titlesSheet.clears, []);
+  assert.deepEqual(titleRows, [
+    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['', '', '', ''],
+    ['https://example.com/b', '', '', ''],
+  ]);
 });
