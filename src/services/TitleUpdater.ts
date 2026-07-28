@@ -27,15 +27,17 @@ class TitleUpdater {
     }
 
     const rows = TitleUpdater.loadRows(titlesSheet, rankingsSheet);
-    const pendingRows = rows.filter((row) =>
-      TitleUpdater.needsNormalization(row),
-    );
-    if (pendingRows.length === 0) {
+    // countPendingRows is the incomplete gate so the early exit and the final
+    // queue-alive decision share one definition of "still needs a title".
+    if (TitleUpdater.countPendingRows(rows) === 0) {
       return false;
     }
 
     // Rows that already failed stay eligible for retry, but unattempted rows
     // must advance first so a permanently broken head cannot stall the queue.
+    const pendingRows = rows.filter((row) =>
+      TitleUpdater.needsNormalization(row),
+    );
     const preferredRows = pendingRows.filter(
       (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
     );
@@ -66,7 +68,7 @@ class TitleUpdater {
     }
 
     // Keep the queue alive so the next invocation can run the failure-retry pass.
-    return rows.some((row) => TitleUpdater.needsNormalization(row));
+    return TitleUpdater.countPendingRows(rows) > 0;
   }
 
   /**
@@ -248,20 +250,22 @@ class TitleUpdater {
    * panels and the spreadsheet's canonical titles before alias lookup runs.
    */
   private static applyGenericNormalizations(sourceTitle: string): string {
-    return sourceTitle
-      // Drop hyphen-wrapped edition or marketing suffixes.
-      .replace(/-.*-/g, '')
-      // Prefer full-width ampersands used by Japanese spreadsheet titles.
-      .replace(/&amp;/g, '＆')
-      .replace(/!/g, '！')
-      .replace(/ - /g, ' － ')
-      // Remove edition labels that would otherwise create near-duplicate keys.
-      .replace(/《?新版》?/g, '')
-      .replace(/第\d+版/g, '')
-      .replace(/\(.*?パック\)/, '')
-      // Normalize mixed-width separators to the forms used in the sheet.
-      .replace(/\s*･\s*/g, '・')
-      .replace(/\s*:\s*/g, '：')
-      .trim();
+    return (
+      sourceTitle
+        // Drop hyphen-wrapped edition or marketing suffixes.
+        .replace(/-.*-/g, '')
+        // Prefer full-width ampersands used by Japanese spreadsheet titles.
+        .replace(/&amp;/g, '＆')
+        .replace(/!/g, '！')
+        .replace(/ - /g, ' － ')
+        // Remove edition labels that would otherwise create near-duplicate keys.
+        .replace(/《?新版》?/g, '')
+        .replace(/第\d+版/g, '')
+        .replace(/\(.*?パック\)/, '')
+        // Normalize mixed-width separators to the forms used in the sheet.
+        .replace(/\s*･\s*/g, '・')
+        .replace(/\s*:\s*/g, '：')
+        .trim()
+    );
   }
 }
