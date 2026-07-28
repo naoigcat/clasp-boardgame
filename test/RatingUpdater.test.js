@@ -130,6 +130,71 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
   ]);
 });
 
+test('RatingUpdater writes ratings then clears surplus Ratings rows', () => {
+  const ratingsSheet = createSheet('Ratings', 4);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('#hashtag', '4') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  // Write first so a failed setValues cannot wipe Ratings, then trim only the
+  // abandoned physical rows left by a shorter replacement snapshot.
+  assert.deepEqual(
+    ratingsSheet.calls
+      .filter(
+        (call) => call.type === 'setValues' || call.type === 'clearContent',
+      )
+      .map((call) => call.type),
+    ['setValues', 'clearContent'],
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), [
+    {
+      type: 'clearContent',
+      row: 3,
+      column: 1,
+      numRows: 2,
+      numColumns: 2,
+    },
+  ]);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 1,
+      numColumns: 2,
+      values: [['ハッシュタグ', '4']],
+    },
+  ]);
+});
+
+test('RatingUpdater leaves Ratings intact when setValues fails', () => {
+  const ratingsSheet = createSheet('Ratings', 4, { failOnSetValues: true });
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(() => context.RatingUpdater.run(), /setValues failed/);
+
+  // Clearing must not run after a write failure; otherwise the previous
+  // Ratings snapshot would disappear until the next successful Bodoge import.
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
 test('RatingUpdater leaves the Ratings sheet untouched without a configured user ID', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   const sandbox = createRatingSandbox({

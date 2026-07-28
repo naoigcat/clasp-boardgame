@@ -21,8 +21,9 @@ function findSheet(
  * Clears only data rows below a header when such rows exist.
  *
  * Apps Script rejects zero-height ranges, so this guard keeps an empty sheet a
- * valid state rather than an exceptional one. Headers stay intact because
- * Rankings and Ratings always rewrite from row 2 downward.
+ * valid state rather than an exceptional one. Headers stay intact because data
+ * rewrites always start at row 2. Prefer clearSurplusSheetDataRows after a
+ * successful setValues when replacing a non-empty snapshot.
  */
 function clearSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -46,9 +47,10 @@ function clearSheetDataRows(
 /**
  * Clears only rows below a just-written data block.
  *
- * Titles compaction drops blank URL slots, so abandoned physical rows must be
- * trimmed. Clearing after setValues avoids a window where a failed rewrite
- * would erase source titles and manual corrections that Rankings cannot restore.
+ * Snapshot sheets (Titles, Rankings, Ratings) write first, then trim abandoned
+ * physical rows. Clearing after setValues avoids a window where a failed rewrite
+ * would leave a header-only sheet and erase data that cannot be restored until
+ * the next successful fetch.
  */
 function clearSurplusSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,

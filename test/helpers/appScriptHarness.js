@@ -50,8 +50,11 @@ function loadScripts(sandbox, scripts) {
 
 /**
  * Creates a minimal sheet double that records range mutations for assertions.
+ *
+ * `failOnSetValues` lets regression tests prove writers clear only after a
+ * successful rewrite, matching Titles' write-then-trim surplus pattern.
  */
-function createSheet(name, lastRow) {
+function createSheet(name, lastRow, { failOnSetValues = false } = {}) {
   const calls = [];
   return {
     name,
@@ -80,6 +83,9 @@ function createSheet(name, lastRow) {
           });
         },
         setValues(values) {
+          if (failOnSetValues) {
+            throw new Error('setValues failed');
+          }
           calls.push({
             type: 'setValues',
             row,
