@@ -54,8 +54,11 @@ class RatingUpdater {
       firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
     );
 
-    clearSheetDataRows(sheet, SHEET_LAYOUT.RATING_COLUMN_COUNT);
+    // An explicit empty Bodoge list is the only case that may wipe Ratings.
+    // Non-empty imports write first, then trim surplus, so a failed setValues
+    // leaves the previous complete snapshot instead of a blank sheet.
     if (rows.length === 0) {
+      clearSheetDataRows(sheet, SHEET_LAYOUT.RATING_COLUMN_COUNT);
       return;
     }
 
@@ -67,6 +70,11 @@ class RatingUpdater {
         SHEET_LAYOUT.RATING_COLUMN_COUNT,
       )
       .setValues(rows);
+    clearSurplusSheetDataRows(
+      sheet,
+      rows.length,
+      SHEET_LAYOUT.RATING_COLUMN_COUNT,
+    );
   }
 
   /**
@@ -164,15 +172,17 @@ class RatingUpdater {
       return null;
     }
 
-    return titleMatch[1]
-      // Keep the Japanese segment when English and Japanese are slash-separated.
-      .split('/')[0]
-      // Drop parenthetical notes that are not part of the canonical title.
-      .replace(/（.*）/, '')
-      .replace('：新版', '')
-      .replace('（拡張）', '')
-      .replace('&amp;', '＆')
-      .trim();
+    return (
+      titleMatch[1]
+        // Keep the Japanese segment when English and Japanese are slash-separated.
+        .split('/')[0]
+        // Drop parenthetical notes that are not part of the canonical title.
+        .replace(/（.*）/, '')
+        .replace('：新版', '')
+        .replace('（拡張）', '')
+        .replace('&amp;', '＆')
+        .trim()
+    );
   }
 
   /**

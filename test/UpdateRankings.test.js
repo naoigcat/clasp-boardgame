@@ -91,7 +91,7 @@ test('RankingUpdater skips clearContent for a header-only Rankings sheet and wri
   ]);
 });
 
-test('RankingUpdater clears existing rows before writing fetched games', () => {
+test('RankingUpdater writes fetched games then clears surplus Rankings rows', () => {
   const rankingsSheet = createSheet('Rankings', 4);
   const sandbox = createSandbox({
     sheets: { Rankings: rankingsSheet },
@@ -106,8 +106,18 @@ test('RankingUpdater clears existing rows before writing fetched games', () => {
 
   context.RankingUpdater.run();
 
+  // Write first so a failed setValues cannot wipe Rankings, then trim only the
+  // abandoned physical rows left by a shorter replacement snapshot.
+  assert.deepEqual(
+    rankingsSheet.calls
+      .filter(
+        (call) => call.type === 'setValues' || call.type === 'clearContent',
+      )
+      .map((call) => call.type),
+    ['setValues', 'clearContent'],
+  );
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), [
-    { type: 'clearContent', row: 2, column: 1, numRows: 3, numColumns: 15 },
+    { type: 'clearContent', row: 3, column: 1, numRows: 2, numColumns: 15 },
   ]);
   assert.deepEqual(getCalls(rankingsSheet, 'setValues'), [
     {
@@ -119,6 +129,27 @@ test('RankingUpdater clears existing rows before writing fetched games', () => {
       values: [expectedRankingRow()],
     },
   ]);
+});
+
+test('RankingUpdater leaves Rankings intact when setValues fails', () => {
+  const rankingsSheet = createSheet('Rankings', 4, { failOnSetValues: true });
+  const sandbox = createSandbox({
+    sheets: { Rankings: rankingsSheet },
+    responses: [
+      {
+        status: 200,
+        body: rankingPage([rankingGame()], [rankingTag()]),
+      },
+    ],
+  });
+  const context = loadRankings(sandbox);
+
+  assert.throws(() => context.RankingUpdater.run(), /setValues failed/);
+
+  // Clearing must not run after a write failure; otherwise the previous
+  // Rankings snapshot would disappear until the next successful catalog fetch.
+  assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(rankingsSheet, 'setValues'), []);
 });
 
 test('RankingUpdater keeps existing rows when fetched HTML has no games', () => {

@@ -53,7 +53,9 @@ class RankingUpdater {
 
     const response = HttpClient.get(BOARD_GAME_ARENA_CONFIG.HOME_PAGE_URL);
     if (response.getResponseCode() !== 200) {
-      throw new Error(`Board Game Arena returned HTTP ${response.getResponseCode()}`);
+      throw new Error(
+        `Board Game Arena returned HTTP ${response.getResponseCode()}`,
+      );
     }
 
     const rows = RankingUpdater.parseRows(response.getContentText());
@@ -63,7 +65,8 @@ class RankingUpdater {
       return;
     }
 
-    clearSheetDataRows(sheet, SHEET_LAYOUT.RANKING_COLUMN_COUNT);
+    // Write first, then trim surplus rows so a failed setValues leaves the
+    // previous Rankings snapshot intact instead of an empty header-only sheet.
     sheet
       .getRange(
         SHEET_LAYOUT.FIRST_DATA_ROW,
@@ -72,6 +75,11 @@ class RankingUpdater {
         SHEET_LAYOUT.RANKING_COLUMN_COUNT,
       )
       .setValues(rows);
+    clearSurplusSheetDataRows(
+      sheet,
+      rows.length,
+      SHEET_LAYOUT.RANKING_COLUMN_COUNT,
+    );
   }
 
   /**
@@ -90,7 +98,9 @@ class RankingUpdater {
       );
       return games.map((game) => RankingUpdater.toSheetRow(game, tagNames));
     } catch (error: unknown) {
-      Logger.log(`Unable to parse Board Game Arena catalog: ${getErrorMessage(error)}`);
+      Logger.log(
+        `Unable to parse Board Game Arena catalog: ${getErrorMessage(error)}`,
+      );
       throw error;
     }
   }
@@ -192,7 +202,10 @@ class RankingUpdater {
   /**
    * Requires a JSON object before reading named properties from it.
    */
-  private static requireRecord(value: unknown, label: string): Record<string, unknown> {
+  private static requireRecord(
+    value: unknown,
+    label: string,
+  ): Record<string, unknown> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       throw new Error(`Expected ${label} to be an object`);
     }
@@ -238,7 +251,10 @@ class RankingUpdater {
     label: string,
   ): number[] {
     const value = record[propertyName];
-    if (!Array.isArray(value) || value.some((item) => typeof item !== 'number')) {
+    if (
+      !Array.isArray(value) ||
+      value.some((item) => typeof item !== 'number')
+    ) {
       throw new Error(`Expected ${label}.${propertyName} to be a number array`);
     }
     return value;
@@ -258,11 +274,11 @@ class RankingUpdater {
     const value = record[propertyName];
     if (
       !Array.isArray(value) ||
-      value.some(
-        (tag) => !Array.isArray(tag) || typeof tag[0] !== 'number',
-      )
+      value.some((tag) => !Array.isArray(tag) || typeof tag[0] !== 'number')
     ) {
-      throw new Error(`Expected ${label}.${propertyName} to be a tag tuple array`);
+      throw new Error(
+        `Expected ${label}.${propertyName} to be a tag tuple array`,
+      );
     }
     return value.map((tag) => tag[0] as number);
   }
