@@ -85,6 +85,9 @@ function loadRatingUpdater(sandbox) {
 
 /**
  * Builds one Bodoge rating card in the markup shape consumed by RatingUpdater.
+ *
+ * Joins with newlines to mirror pretty-printed Bodoge HTML; the card regex must
+ * span those newlines or parsePage would treat real pages as unrecognized.
  */
 function ratingCard(title, rating) {
   return [
@@ -93,7 +96,7 @@ function ratingCard(title, rating) {
     `<div class="rating--result-stars" data-rating-mode="result" data-rating-result="${rating}">`,
     '</div>',
     '</a>',
-  ].join('');
+  ].join('\n');
 }
 
 /**
