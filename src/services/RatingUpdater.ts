@@ -130,8 +130,10 @@ class RatingUpdater {
    * HTML is treated as unrecognized so callers can keep the prior snapshot.
    */
   private static parsePage(pageHtml: string): RatingPage {
+    // [\s\S] so pretty-printed Bodoge HTML with newlines between tags still matches.
     const cards =
-      pageHtml.match(/<a class="list--interests-item-title".*?<\/a>/g) ?? [];
+      pageHtml.match(/<a class="list--interests-item-title"[\s\S]*?<\/a>/g) ??
+      [];
     const rows: RatingSheetRow[] = [];
 
     cards.forEach((card) => {
