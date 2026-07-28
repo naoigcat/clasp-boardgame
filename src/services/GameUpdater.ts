@@ -300,6 +300,8 @@ class GameUpdater {
   /**
    * Copies parsed BoardGameGeek values into their spreadsheet columns.
    *
+   * All XML fields are resolved before any cell is mutated so a mid-parse
+   * failure leaves the prior row intact for `recordFailure` to stamp.
    * Success clears the previous error cell and stamps the shared batch time so
    * the refresh window starts from this attempt.
    */
@@ -309,11 +311,10 @@ class GameUpdater {
     gameId: string,
     current: Date,
   ): void {
-    GameUpdater.writePlayerRecommendations(
-      row,
-      GameUpdater.getPlayerRecommendations(gameItem, gameId),
+    const recommendations = GameUpdater.getPlayerRecommendations(
+      gameItem,
+      gameId,
     );
-
     const ratings = getRequiredXmlChild(
       getRequiredXmlChild(gameItem, 'statistics'),
       'ratings',
@@ -325,23 +326,22 @@ class GameUpdater {
       'name',
       'boardgame',
     );
-
-    row.values[GAME_VALUE_COLUMN.BOARD_GAME_RANK] = parseDisplayNumber(
+    const boardGameRankValue = parseDisplayNumber(
       getRequiredXmlAttributeValue(boardGameRank, 'value'),
     );
-    row.values[GAME_VALUE_COLUMN.BAYES_AVERAGE] = parseDisplayNumber(
+    const bayesAverage = parseDisplayNumber(
       getRequiredXmlAttributeValue(
         getRequiredXmlChild(ratings, 'bayesaverage'),
         'value',
       ),
     );
-    row.values[GAME_VALUE_COLUMN.AVERAGE_WEIGHT] = parseDisplayNumber(
+    const averageWeight = parseDisplayNumber(
       getRequiredXmlAttributeValue(
         getRequiredXmlChild(ratings, 'averageweight'),
         'value',
       ),
     );
-    row.values[GAME_VALUE_COLUMN.PLAY_TIME] = GameUpdater.formatPlayTime(
+    const playTime = GameUpdater.formatPlayTime(
       getRequiredXmlAttributeValue(
         getRequiredXmlChild(gameItem, 'minplaytime'),
         'value',
@@ -351,12 +351,19 @@ class GameUpdater {
         'value',
       ),
     );
-    row.values[GAME_VALUE_COLUMN.PUBLICATION_YEAR] = parseDisplayNumber(
+    const publicationYear = parseDisplayNumber(
       getRequiredXmlAttributeValue(
         getRequiredXmlChild(gameItem, 'yearpublished'),
         'value',
       ),
     );
+
+    GameUpdater.writePlayerRecommendations(row, recommendations);
+    row.values[GAME_VALUE_COLUMN.BOARD_GAME_RANK] = boardGameRankValue;
+    row.values[GAME_VALUE_COLUMN.BAYES_AVERAGE] = bayesAverage;
+    row.values[GAME_VALUE_COLUMN.AVERAGE_WEIGHT] = averageWeight;
+    row.values[GAME_VALUE_COLUMN.PLAY_TIME] = playTime;
+    row.values[GAME_VALUE_COLUMN.PUBLICATION_YEAR] = publicationYear;
     row.values[GAME_VALUE_COLUMN.LAST_UPDATED_AT] = current;
     row.values[GAME_VALUE_COLUMN.ERROR_MESSAGE] = '';
   }

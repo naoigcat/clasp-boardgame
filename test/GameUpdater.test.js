@@ -16,6 +16,8 @@ const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [1, 4, 21, 22, 23];
 const GAME_LAST_UPDATED_AT_COLUMN = 24;
 /** Zero-based Games value column that stores the last row-level error. */
 const GAME_ERROR_MESSAGE_COLUMN = 25;
+/** Zero-based Games value column for the first (2-player) recommendation. */
+const GAME_PLAYER_RECOMMENDATION_START_COLUMN = 7;
 /** Zero-based Games value column for the 10-player recommendation. */
 const GAME_TEN_PLAYER_RECOMMENDATION_COLUMN = 15;
 /** Zero-based Games value column for BoardGameGeek board-game rank. */
@@ -425,6 +427,74 @@ test('GameUpdater writes 2–10 player recommendations and leaves board-game ran
   assert.equal(row.values[GAME_TEN_PLAYER_RECOMMENDATION_COLUMN], 'Best');
   assert.equal(row.values[GAME_BOARD_GAME_RANK_COLUMN], 42);
   assert.notEqual(row.values[GAME_BOARD_GAME_RANK_COLUMN], 'Recommended');
+});
+
+test('GameUpdater keeps prior player recommendations when applyGameItem fails mid-parse', () => {
+  const row = createGameRow(0, 'https://boardgamegeek.com/boardgame/42');
+  row.values[GAME_PLAYER_RECOMMENDATION_START_COLUMN] = 'Best';
+  row.values[GAME_TEN_PLAYER_RECOMMENDATION_COLUMN] = 'Recommended';
+  row.values[GAME_BOARD_GAME_RANK_COLUMN] = 99;
+  const priorRecommendations = row.values.slice(
+    GAME_PLAYER_RECOMMENDATION_START_COLUMN,
+    GAME_TEN_PLAYER_RECOMMENDATION_COLUMN + 1,
+  );
+  const priorFormulaInputs = getArrayFormulaInputs(row.values);
+  const gamesSheet = createGamesSheet([row]);
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  // Poll data is present so recommendations would be rewritten if applied before
+  // statistics parsing; omitting statistics forces the mid-apply failure path.
+  context.GameUpdater.fetchGameItem = () =>
+    createXmlElement({
+      children: {
+        poll: [
+          createXmlElement({
+            attributes: { name: 'suggested_numplayers' },
+            children: {
+              results: [
+                createPlayerCountResults('2', 'Not Recommended'),
+                createPlayerCountResults('10', 'Not Recommended'),
+              ],
+            },
+          }),
+        ],
+      },
+    });
+
+  assert.equal(context.GameUpdater.run(), false);
+
+  const written = gamesSheet.writes[0].values[0];
+  // Copy into a host-realm array: sheet doubles hold VM arrays from loadScripts.
+  assert.deepEqual(
+    Array.from(
+      written.slice(
+        GAME_PLAYER_RECOMMENDATION_START_COLUMN,
+        GAME_TEN_PLAYER_RECOMMENDATION_COLUMN + 1,
+      ),
+    ),
+    priorRecommendations,
+  );
+  assert.equal(written[GAME_BOARD_GAME_RANK_COLUMN], 99);
+  assert.match(
+    written[GAME_ERROR_MESSAGE_COLUMN],
+    /Required XML child "statistics" was not found/,
+  );
+  assert.ok(written[GAME_LAST_UPDATED_AT_COLUMN] instanceof Date);
+  assert.deepEqual(getArrayFormulaInputs(written), priorFormulaInputs);
 });
 
 test('GameUpdater throttles before raising a non-2xx BoardGameGeek response', () => {
