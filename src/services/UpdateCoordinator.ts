@@ -46,8 +46,19 @@ class UpdateCoordinator {
 
     // These imports replace complete sheet snapshots and normally fit in one
     // execution; the slower per-game work is deliberately deferred to batches.
-    RankingUpdater.run();
-    RatingUpdater.run();
+    // Catch each sync import on its own so a Bodoge or BGA catalog outage cannot
+    // skip scheduling BoardGameGeek batches that still need to run.
+    try {
+      RankingUpdater.run();
+    } catch (error: unknown) {
+      Logger.log(`Ranking update failed: ${getErrorMessage(error)}`);
+    }
+
+    try {
+      RatingUpdater.run();
+    } catch (error: unknown) {
+      Logger.log(`Rating update failed: ${getErrorMessage(error)}`);
+    }
 
     ScriptPropertyStore.set(
       UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY,
