@@ -12,12 +12,19 @@ const { loadScripts } = require('./helpers/appScriptHarness');
 /**
  * Creates service and Apps Script doubles for update-queue behavior tests.
  */
-function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
+function createUpdateSandbox(
+  gameResults,
+  titleResults,
+  lockAcquired = true,
+  options = {},
+) {
   const calls = [];
+  const logs = [];
   const properties = new Map();
 
   return {
     calls,
+    logs,
     LockService: {
       getScriptLock() {
         return {
@@ -29,7 +36,9 @@ function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
       },
     },
     Logger: {
-      log() {},
+      log(message) {
+        logs.push(message);
+      },
     },
     PropertiesService: {
       getScriptProperties() {
@@ -66,11 +75,17 @@ function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
     RankingUpdater: {
       run() {
         calls.push(['rankings']);
+        if (options.rankingError) {
+          throw options.rankingError;
+        }
       },
     },
     RatingUpdater: {
       run() {
         calls.push(['ratings']);
+        if (options.ratingError) {
+          throw options.ratingError;
+        }
       },
     },
     TitleUpdater: {
@@ -88,6 +103,7 @@ function createUpdateSandbox(gameResults, titleResults, lockAcquired = true) {
 function loadUpdate(sandbox) {
   return loadScripts(sandbox, [
     { path: 'src/config/AppConfig.ts', exports: [] },
+    { path: 'src/shared/ErrorUtils.ts', exports: ['getErrorMessage'] },
     {
       path: 'src/infrastructure/ScriptPropertyStore.ts',
       exports: ['ScriptPropertyStore'],
@@ -128,10 +144,7 @@ test('scheduled updates complete games before starting titles with the same hand
   sandbox.calls.length = 0;
 
   context.update({ triggerUid: 'first' });
-  assert.deepEqual(sandbox.calls, [
-    ['getProperty', 'UPDATE_STEP'],
-    ['games'],
-  ]);
+  assert.deepEqual(sandbox.calls, [['getProperty', 'UPDATE_STEP'], ['games']]);
 
   sandbox.calls.length = 0;
   context.update({ triggerUid: 'second' });
@@ -158,4 +171,81 @@ test('update does not start a second phase while another update holds the lock',
   context.update();
 
   assert.deepEqual(sandbox.calls, []);
+});
+
+test('update still schedules games when ranking import fails', () => {
+  const sandbox = createUpdateSandbox([], [], true, {
+    rankingError: new Error('BGA catalog unavailable'),
+  });
+  const context = loadUpdate(sandbox);
+
+  context.update();
+
+  assert.deepEqual(sandbox.calls, [
+    ['deleteTrigger', 'updateGames'],
+    ['deleteTrigger', 'updateRankings'],
+    ['deleteTrigger', 'updateTitles'],
+    ['deleteTrigger', 'updateRatings'],
+    ['deleteTrigger', 'update'],
+    ['deleteProperty', 'UPDATE_STEP'],
+    ['rankings'],
+    ['ratings'],
+    ['setProperty', 'UPDATE_STEP', 'games'],
+    ['ensureTrigger', 'update', 5],
+  ]);
+  assert.deepEqual(sandbox.logs, [
+    'Ranking update failed: Error: BGA catalog unavailable',
+  ]);
+});
+
+test('update still schedules games when rating import fails', () => {
+  const sandbox = createUpdateSandbox([], [], true, {
+    ratingError: new Error('Bodoge HTML unrecognized'),
+  });
+  const context = loadUpdate(sandbox);
+
+  context.update();
+
+  assert.deepEqual(sandbox.calls, [
+    ['deleteTrigger', 'updateGames'],
+    ['deleteTrigger', 'updateRankings'],
+    ['deleteTrigger', 'updateTitles'],
+    ['deleteTrigger', 'updateRatings'],
+    ['deleteTrigger', 'update'],
+    ['deleteProperty', 'UPDATE_STEP'],
+    ['rankings'],
+    ['ratings'],
+    ['setProperty', 'UPDATE_STEP', 'games'],
+    ['ensureTrigger', 'update', 5],
+  ]);
+  assert.deepEqual(sandbox.logs, [
+    'Rating update failed: Error: Bodoge HTML unrecognized',
+  ]);
+});
+
+test('update still schedules games when both sync imports fail', () => {
+  const sandbox = createUpdateSandbox([], [], true, {
+    rankingError: new Error('BGA catalog unavailable'),
+    ratingError: new Error('Bodoge HTML unrecognized'),
+  });
+  const context = loadUpdate(sandbox);
+
+  context.update();
+
+  assert.deepEqual(sandbox.calls, [
+    ['deleteTrigger', 'updateGames'],
+    ['deleteTrigger', 'updateRankings'],
+    ['deleteTrigger', 'updateTitles'],
+    ['deleteTrigger', 'updateRatings'],
+    ['deleteTrigger', 'update'],
+    ['deleteProperty', 'UPDATE_STEP'],
+    ['rankings'],
+    ['ratings'],
+    ['setProperty', 'UPDATE_STEP', 'games'],
+    ['ensureTrigger', 'update', 5],
+  ]);
+  assert.deepEqual(sandbox.logs, [
+    'Ranking update failed: Error: BGA catalog unavailable',
+    'Rating update failed: Error: Bodoge HTML unrecognized',
+  ]);
 });
