@@ -153,9 +153,30 @@ function createTitleSandbox({ titleRows, responses, failOnSetValues = false }) {
 /**
  * Builds the Board Game Arena markup fragment consumed by TitleUpdater.
  */
-function titlePage(gameName) {
-  return `id="game_name" class="block gamename"\n>${gameName}</a`;
+function titlePage(gameName, { compact = false } = {}) {
+  // Compact panels keep the closing `>` on the same line; the live markup
+  // usually inserts a newline, and both forms must match GAME_NAME_PATTERN.
+  const separator = compact ? '' : '\n';
+  return `id="game_name" class="block gamename"${separator}>${gameName}</a`;
 }
+
+test('TitleUpdater extracts titles from compacted Board Game Arena markup', () => {
+  const titleRows = [['https://example.com/compact', '', '', '']];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('カタン', { compact: true }) }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // Without allowing whitespace after gamename, same-line panels yield
+  // "game name not found" for every URL and drain the queue after one retry.
+  assert.equal(context.TitleUpdater.run(), false);
+
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written[0][TITLE_SOURCE_COLUMN], 'カタン');
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
+  assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+});
 
 test('TitleUpdater applies generic cleanup before exact aliases', () => {
   const context = loadTitleUpdater();

@@ -129,7 +129,7 @@ const BOARD_GAME_ARENA_CONFIG = {
 const BOARD_GAME_ARENA_TITLE_CONFIG = {
   /** Pattern used to extract the Japanese game name from a game panel page. */
   GAME_NAME_PATTERN:
-    /id="game_name" class="block gamename"\n\s*>(.*?)(\(.*?\))?<\/a/m,
+    /id="game_name" class="block gamename"\s*>(.*?)(\(.*?\))?<\/a/m,
   /** Delay between title page requests to respect the source site. */
   REQUEST_DELAY_MILLISECONDS: 1000,
 } as const;
