@@ -389,7 +389,8 @@ test('GameUpdater clears formula inputs only for Games rows refreshed within the
   assert.equal(context.GameUpdater.run(), true);
 
   const writtenRows = gamesSheet.writes[0].values;
-  assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(''));
+  // null clears the cell for ARRAYFORMULA; '' would leave a blocking blank.
+  assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(null));
   assert.deepEqual(
     getArrayFormulaInputs(writtenRows[50]),
     getArrayFormulaInputs(rows[50].values),
@@ -473,7 +474,7 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
   assert.equal(context.GameUpdater.run(), false);
   assert.deepEqual(
     getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
-    Array(5).fill(''),
+    Array(5).fill(null),
   );
 });
 
