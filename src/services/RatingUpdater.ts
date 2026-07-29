@@ -54,9 +54,10 @@ class RatingUpdater {
       firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
     );
 
-    // An explicit empty Bodoge list is the only case that may wipe Ratings.
-    // Non-empty imports write first, then trim surplus, so a failed setValues
-    // leaves the previous complete snapshot instead of a blank sheet.
+    // fetchAllRows returns [] only for Bodoge's explicit empty-list marker.
+    // Cards that matched but yielded no titles throw instead, so a markup
+    // change cannot wipe Ratings. Non-empty imports write first, then trim
+    // surplus, so a failed setValues leaves the previous complete snapshot.
     if (rows.length === 0) {
       clearSheetDataRows(sheet, SHEET_LAYOUT.RATING_COLUMN_COUNT);
       return;
@@ -86,6 +87,9 @@ class RatingUpdater {
    */
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
+    // Distinguishes Bodoge's explicit empty list from card markup that matched
+    // but produced no importable titles (missing Japanese titles, exclusions).
+    let sawCards = false;
 
     for (
       let pageNumber = 1;
@@ -101,9 +105,17 @@ class RatingUpdater {
 
       const page = RatingUpdater.parsePage(response.getContentText());
       if (!page.hasCards) {
+        // Outer card wrappers without extractable titles must not clear Ratings;
+        // only a marker-only response (no cards seen) may return [].
+        if (sawCards && rows.length === 0) {
+          throw new Error(
+            'Bodoge ratings pages contained cards but yielded no importable titles',
+          );
+        }
         return rows;
       }
 
+      sawCards = true;
       rows.push(...page.rows);
       Utilities.sleep(BODOGE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
