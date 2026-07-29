@@ -275,6 +275,36 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
+test('RatingUpdater keeps existing rows when cards match but no titles can be extracted', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Outer card wrapper is present so parsePage sets hasCards, but the Japanese
+  // title div is missing so extraction yields zero rows. Reaching the empty
+  // marker must throw rather than treating the import as an explicit empty list.
+  const cardWithoutJapaneseTitle = [
+    '<a class="list--interests-item-title">',
+    '<div class="list--interests-item-title-english">Catan</div>',
+    '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="5">',
+    '</div>',
+    '</a>',
+  ].join('\n');
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: cardWithoutJapaneseTitle },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings pages contained cards but yielded no importable titles/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
 test('RatingUpdater keeps existing rows when Bodoge keeps returning rating cards past the page cap', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   const maxPageCount = 100;
