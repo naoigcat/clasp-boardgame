@@ -7,11 +7,18 @@
 const SHEET_LAYOUT = {
   /** The header occupies the first row in every managed sheet. */
   FIRST_DATA_ROW: 2,
+  /** Column A holds the BoardGameGeek rich-text link for each Games row. */
+  GAMES_LINK_COLUMN: 1,
   /**
    * First column written after a Games metadata refresh. Column A stays
    * untouched so the rich-text BoardGameGeek link is preserved.
    */
   GAMES_WRITE_START_COLUMN: 2,
+  /**
+   * Number of Games value columns from B through AA. Read and write use this
+   * width so column A is never part of the value range.
+   */
+  GAMES_VALUE_COLUMN_COUNT: 26,
   /** First column of the Titles range. */
   TITLES_START_COLUMN: 1,
   /** First column of the Rankings and Ratings ranges. */
