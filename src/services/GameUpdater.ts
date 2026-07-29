@@ -245,13 +245,14 @@ class GameUpdater {
   /**
    * Clears values owned by array formulas after a successful metadata refresh.
    *
-   * Waiting for a completed refresh preserves the previous derived values when
-   * the upstream response is unavailable, while still allowing formulas to
-   * recalculate from changed metadata.
+   * Uses null rather than an empty string so Apps Script `setValues` truly
+   * blanks the cell; empty strings block ARRAYFORMULA from re-expanding into
+   * the cleared cells. Waiting for a completed refresh preserves the previous
+   * derived values when the upstream response is unavailable.
    */
   private static clearArrayFormulaInputs(row: GameSheetRow): void {
     GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
-      row.values[column] = '';
+      row.values[column] = null;
     });
   }
 
