@@ -76,34 +76,55 @@ class TitleUpdater {
    *
    * New URLs are appended with blank titles so later batches scrape them. Known
    * URLs keep their prior source title, canonical title, and error cells.
+   * Both sheet reads stop at getLastRow so open-ended A1 spans cannot pull the
+   * sheet's maximum row count into memory on large spreadsheets.
    */
   private static loadRows(
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
     rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet,
   ): TitleSheetRow[] {
-    const rows = titlesSheet
-      .getRange('$A$2:$D')
-      .getValues()
-      .filter((row) => Boolean(row[TITLE_COLUMN.URL]));
+    const titlesDataRowCount =
+      titlesSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    const rows =
+      titlesDataRowCount <= 0
+        ? []
+        : titlesSheet
+            .getRange(
+              SHEET_LAYOUT.FIRST_DATA_ROW,
+              SHEET_LAYOUT.TITLES_START_COLUMN,
+              titlesDataRowCount,
+              SHEET_LAYOUT.TITLE_COLUMN_COUNT,
+            )
+            .getValues()
+            .filter((row) => Boolean(row[TITLE_COLUMN.URL]));
     const knownUrls = new Set<string>(
       rows.map((row) => String(row[TITLE_COLUMN.URL])),
     );
 
-    rankingsSheet
-      .getRange('$A$2:$A')
-      .getValues()
-      .forEach((rankingRow) => {
-        const gameUrl = rankingRow[0];
-        if (!gameUrl) {
-          return;
-        }
+    const rankingsDataRowCount =
+      rankingsSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    if (rankingsDataRowCount > 0) {
+      rankingsSheet
+        .getRange(
+          SHEET_LAYOUT.FIRST_DATA_ROW,
+          SHEET_LAYOUT.DEFAULT_START_COLUMN,
+          rankingsDataRowCount,
+          1,
+        )
+        .getValues()
+        .forEach((rankingRow) => {
+          const gameUrl = rankingRow[0];
+          if (!gameUrl) {
+            return;
+          }
 
-        const url = String(gameUrl);
-        if (!knownUrls.has(url)) {
-          rows.push([url, '', '', '']);
-          knownUrls.add(url);
-        }
-      });
+          const url = String(gameUrl);
+          if (!knownUrls.has(url)) {
+            rows.push([url, '', '', '']);
+            knownUrls.add(url);
+          }
+        });
+    }
 
     return rows;
   }

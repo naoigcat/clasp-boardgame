@@ -28,24 +28,36 @@ const GAME_BOARD_GAME_RANK_COLUMN = 16;
  */
 function createEmptyGamesSheet() {
   const writes = [];
+  const rangeReads = [];
 
   return {
     writes,
+    rangeReads,
+    getLastRow() {
+      // Header only: no data rows to read.
+      return 1;
+    },
     getRange(a1NotationOrRow, column, numRows, numColumns) {
       if (typeof a1NotationOrRow === 'string') {
-        return {
-          getRichTextValues() {
-            return [[null]];
-          },
-          getValues() {
-            return a1NotationOrRow === '$B$2:$Z'
-              ? [Array(25).fill('')]
-              : [['']];
-          },
-        };
+        throw new Error(`Unexpected open-ended range: ${a1NotationOrRow}`);
       }
 
+      rangeReads.push({
+        row: a1NotationOrRow,
+        column,
+        numRows,
+        numColumns,
+      });
+
       return {
+        getRichTextValues() {
+          return Array.from({ length: numRows }, () => [null]);
+        },
+        getValues() {
+          return Array.from({ length: numRows }, () =>
+            Array(numColumns).fill(''),
+          );
+        },
         setValues(values) {
           writes.push({
             a1NotationOrRow,
@@ -88,37 +100,39 @@ function createGameRow(index, url) {
  */
 function createGamesSheet(rows) {
   const writes = [];
+  const rangeReads = [];
 
   return {
     writes,
+    rangeReads,
+    getLastRow() {
+      // Header plus every managed data row supplied to the double.
+      return rows.length + 1;
+    },
     getRange(a1NotationOrRow, column, numRows, numColumns) {
       if (typeof a1NotationOrRow === 'string') {
-        if (a1NotationOrRow === '$A$2:$A') {
-          return {
-            getRichTextValues() {
-              return rows.map((row) => [row.gameLink]);
-            },
-          };
-        }
-
-        if (a1NotationOrRow === '$B$2:$Z') {
-          return {
-            getValues() {
-              return rows.map((row) => row.values.slice(0, 25));
-            },
-          };
-        }
-
-        if (a1NotationOrRow === '$AA$2:$AA') {
-          return {
-            getValues() {
-              return rows.map((row) => [row.values[25]]);
-            },
-          };
-        }
+        throw new Error(`Unexpected open-ended range: ${a1NotationOrRow}`);
       }
 
-      return {
+      const range = {
+        getRichTextValues() {
+          rangeReads.push({
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          });
+          return rows.slice(0, numRows).map((row) => [row.gameLink]);
+        },
+        getValues() {
+          rangeReads.push({
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          });
+          return rows.slice(0, numRows).map((row) => row.values.slice());
+        },
         setValues(values) {
           writes.push({
             a1NotationOrRow,
@@ -129,6 +143,8 @@ function createGamesSheet(rows) {
           });
         },
       };
+
+      return range;
     },
   };
 }
@@ -294,6 +310,54 @@ test('GameUpdater treats a null rich-text value as the end of the Games data', (
 
   assert.equal(context.GameUpdater.run(), false);
   assert.deepEqual(gamesSheet.writes, []);
+  // Header-only sheets must not issue a data-range read at all.
+  assert.deepEqual(gamesSheet.rangeReads, []);
+});
+
+test('GameUpdater bounds Games sheet reads to getLastRow instead of open-ended A1 ranges', () => {
+  const rows = [
+    createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+    createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+  ];
+  const gamesSheet = createGamesSheet(rows);
+  // Simulate a tall sheet whose last content row is only the two managed games;
+  // open-ended `$A$2:$A` would otherwise scan to the sheet maximum.
+  let reportedLastRow = 3;
+  gamesSheet.getLastRow = () => reportedLastRow;
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => ({});
+  context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+
+  assert.deepEqual(gamesSheet.rangeReads, [
+    { row: 2, column: 1, numRows: 2, numColumns: 1 },
+    { row: 2, column: 2, numRows: 2, numColumns: 26 },
+  ]);
+  assert.equal(gamesSheet.writes[0].values.length, 2);
+  // A regression that reintroduced `$A$2:$A` would throw in createGamesSheet.
+  reportedLastRow = 1;
+  gamesSheet.rangeReads.length = 0;
+  gamesSheet.writes.length = 0;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.deepEqual(gamesSheet.rangeReads, []);
 });
 
 test('GameUpdater clears formula inputs only for Games rows refreshed within the batch', () => {
@@ -303,6 +367,9 @@ test('GameUpdater clears formula inputs only for Games rows refreshed within the
   const gamesSheet = createGamesSheet(rows);
   const context = loadGameUpdater({
     Date,
+    Logger: {
+      log() {},
+    },
     SpreadsheetApp: {
       getActiveSpreadsheet() {
         return {

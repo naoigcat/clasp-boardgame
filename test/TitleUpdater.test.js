@@ -44,29 +44,42 @@ function loadTitleUpdaterService(sandbox) {
 /**
  * Creates Titles and Rankings sheet doubles around queued HTTP responses.
  */
-function createTitleSandbox({ titleRows, responses, failOnSetValues = false }) {
+function createTitleSandbox({
+  titleRows,
+  responses,
+  failOnSetValues = false,
+  rankingUrls = [],
+}) {
   const responseQueue = [...responses];
   const writes = [];
   const clears = [];
   const operations = [];
+  const titlesRangeReads = [];
+  const rankingsRangeReads = [];
   const titlesSheet = {
     writes,
     clears,
     operations,
+    rangeReads: titlesRangeReads,
     getLastRow() {
       // Header row plus every physical data row, including mid-sheet blanks.
       return titleRows.length + 1;
     },
     getRange(a1NotationOrRow, column, numRows, numColumns) {
       if (typeof a1NotationOrRow === 'string') {
-        return {
-          getValues() {
-            return titleRows.map((row) => row.slice());
-          },
-        };
+        throw new Error(`Unexpected open-ended range: ${a1NotationOrRow}`);
       }
 
       return {
+        getValues() {
+          titlesRangeReads.push({
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          });
+          return titleRows.slice(0, numRows).map((row) => row.slice());
+        },
         clearContent() {
           const clear = {
             row: a1NotationOrRow,
@@ -94,9 +107,33 @@ function createTitleSandbox({ titleRows, responses, failOnSetValues = false }) {
       };
     },
   };
+  const rankingsSheet = {
+    rangeReads: rankingsRangeReads,
+    getLastRow() {
+      return rankingUrls.length + 1;
+    },
+    getRange(a1NotationOrRow, column, numRows, numColumns) {
+      if (typeof a1NotationOrRow === 'string') {
+        throw new Error(`Unexpected open-ended range: ${a1NotationOrRow}`);
+      }
+
+      rankingsRangeReads.push({
+        row: a1NotationOrRow,
+        column,
+        numRows,
+        numColumns,
+      });
+      return {
+        getValues() {
+          return rankingUrls.slice(0, numRows).map((url) => [url]);
+        },
+      };
+    },
+  };
 
   return {
     titlesSheet,
+    rankingsSheet,
     SpreadsheetApp: {
       getActiveSpreadsheet() {
         return {
@@ -105,15 +142,7 @@ function createTitleSandbox({ titleRows, responses, failOnSetValues = false }) {
               return titlesSheet;
             }
             if (name === 'Rankings') {
-              return {
-                getRange() {
-                  return {
-                    getValues() {
-                      return [];
-                    },
-                  };
-                },
-              };
+              return rankingsSheet;
             }
             return null;
           },
@@ -176,6 +205,39 @@ test('TitleUpdater extracts titles from compacted Board Game Arena markup', () =
   assert.equal(written[0][TITLE_SOURCE_COLUMN], 'カタン');
   assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+});
+
+test('TitleUpdater bounds Titles and Rankings reads to getLastRow instead of open-ended A1 ranges', () => {
+  const titleRows = [
+    ['https://example.com/existing', 'カタン', 'カタン', ''],
+    ['https://example.com/from-rankings', 'カルカソンヌ', 'カルカソンヌ', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    rankingUrls: [
+      'https://example.com/existing',
+      'https://example.com/from-rankings',
+      'https://example.com/new',
+    ],
+    responses: [{ status: 200, body: titlePage('アズール') }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  assert.equal(context.TitleUpdater.run(), false);
+
+  // Titles has two physical rows; Rankings contributes one unseen URL. Reads
+  // must use those getLastRow-derived heights, not open-ended `$A$2:$D` / `$A$2:$A`.
+  assert.deepEqual(sandbox.titlesSheet.rangeReads, [
+    { row: 2, column: 1, numRows: 2, numColumns: 4 },
+  ]);
+  assert.deepEqual(sandbox.rankingsSheet.rangeReads, [
+    { row: 2, column: 1, numRows: 3, numColumns: 1 },
+  ]);
+
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written.length, 3);
+  assert.equal(written[2][TITLE_URL_COLUMN], 'https://example.com/new');
+  assert.equal(written[2][TITLE_NORMALIZED_COLUMN], 'アズール');
 });
 
 test('TitleUpdater applies generic cleanup before exact aliases', () => {

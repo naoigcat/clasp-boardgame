@@ -85,22 +85,37 @@ class GameUpdater {
    * Loads contiguous game rows, stopping at the first empty rich-text link.
    *
    * The sheet intentionally uses a blank link as its end marker, so trailing
-   * empty rows must never be written back as data. Column AA is read separately
-   * because Apps Script range strings treat `$B$2:$Z` and `$AA$2:$AA` as
-   * distinct spans that together cover the managed value columns.
+   * empty rows must never be written back as data. Ranges are bounded by
+   * getLastRow so open-ended A1 spans cannot pull the sheet's maximum row
+   * count into memory on large spreadsheets.
    */
   private static loadRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
   ): GameSheetRow[] {
-    const linkValues = sheet.getRange('$A$2:$A').getRichTextValues();
-    const primaryValues = sheet.getRange('$B$2:$Z').getValues();
-    const updateValues = sheet.getRange('$AA$2:$AA').getValues();
+    const dataRowCount = sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    if (dataRowCount <= 0) {
+      return [];
+    }
+
+    const linkValues = sheet
+      .getRange(
+        SHEET_LAYOUT.FIRST_DATA_ROW,
+        SHEET_LAYOUT.GAMES_LINK_COLUMN,
+        dataRowCount,
+        1,
+      )
+      .getRichTextValues();
+    const valueRows = sheet
+      .getRange(
+        SHEET_LAYOUT.FIRST_DATA_ROW,
+        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
+        dataRowCount,
+        SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
+      )
+      .getValues();
     const rows = linkValues.map((linkRow, index) => ({
       gameLink: linkRow[0],
-      values: [
-        ...primaryValues[index],
-        updateValues[index][0],
-      ] as SpreadsheetCellRow,
+      values: valueRows[index] as SpreadsheetCellRow,
     }));
     const firstEmptyRowIndex = rows.findIndex(
       (row) => row.gameLink === null || row.gameLink.getText().length === 0,
