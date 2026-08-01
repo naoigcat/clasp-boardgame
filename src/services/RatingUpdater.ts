@@ -16,6 +16,12 @@ interface RatingPage {
    * as a markup failure.
    */
   readonly hasUnextractableCards: boolean;
+  /**
+   * True when at least one card had a title but no extractable star rating.
+   * A changed rating attribute must not publish title-only rows that wipe the
+   * previous complete Ratings snapshot.
+   */
+  readonly hasCardsWithoutRatings: boolean;
   /** Ratings successfully extracted from the page after exclusions/aliases. */
   readonly rows: readonly RatingSheetRow[];
 }
@@ -132,6 +138,13 @@ class RatingUpdater {
           'Bodoge ratings page contained cards without extractable Japanese titles',
         );
       }
+      // Same snapshot rule when rating markup is missing or empty: titles alone
+      // must not replace a previous complete Ratings sheet.
+      if (page.hasCardsWithoutRatings) {
+        throw new Error(
+          'Bodoge ratings page contained cards without extractable ratings',
+        );
+      }
       rows.push(...page.rows);
       Utilities.sleep(BODOGE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
@@ -164,6 +177,7 @@ class RatingUpdater {
       [];
     const rows: RatingSheetRow[] = [];
     let hasUnextractableCards = false;
+    let hasCardsWithoutRatings = false;
 
     cards.forEach((card) => {
       const sourceTitle = RatingUpdater.extractSourceTitle(card);
@@ -175,6 +189,13 @@ class RatingUpdater {
       }
 
       const rating = RatingUpdater.extractRating(card);
+      if (rating === null) {
+        // Title present but rating markup missing/empty; abort before write so
+        // a changed rating attribute cannot wipe the prior Ratings snapshot.
+        hasCardsWithoutRatings = true;
+        return;
+      }
+
       // Bundled products may expand into multiple spreadsheet titles.
       RatingUpdater.expandTitleAliases(sourceTitle).forEach((title) => {
         rows.push([title, rating]);
@@ -182,11 +203,21 @@ class RatingUpdater {
     });
 
     if (cards.length > 0) {
-      return { hasCards: true, hasUnextractableCards, rows };
+      return {
+        hasCards: true,
+        hasUnextractableCards,
+        hasCardsWithoutRatings,
+        rows,
+      };
     }
 
     if (pageHtml.includes(BODOGE_EMPTY_PLAYED_GAMES_MARKER)) {
-      return { hasCards: false, hasUnextractableCards: false, rows: [] };
+      return {
+        hasCards: false,
+        hasUnextractableCards: false,
+        hasCardsWithoutRatings: false,
+        rows: [],
+      };
     }
 
     throw new Error('Unrecognized Bodoge ratings page HTML');
@@ -221,12 +252,19 @@ class RatingUpdater {
 
   /**
    * Extracts the star-rating value from one Bodoge rating card.
+   *
+   * Returns null when the rating attribute is absent or empty so callers can
+   * abort instead of writing title-only rows that clear prior Ratings data.
    */
-  private static extractRating(cardHtml: string): string {
+  private static extractRating(cardHtml: string): string | null {
     const ratingMatch = cardHtml.match(
       '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="(.*?)">',
     );
-    return ratingMatch?.[1] ?? '';
+    const rating = ratingMatch?.[1];
+    if (rating === undefined || rating.length === 0) {
+      return null;
+    }
+    return rating;
   }
 
   /**

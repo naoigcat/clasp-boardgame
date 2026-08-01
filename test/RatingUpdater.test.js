@@ -288,6 +288,24 @@ function cardWithoutJapaneseTitle(englishTitle = 'Catan') {
   ].join('\n');
 }
 
+/**
+ * Card with a Japanese title but no star-rating markup — rating extraction fails.
+ */
+function cardWithoutRatingMarkup(title = 'カタン') {
+  return [
+    '<a class="list--interests-item-title">',
+    `<div class="list--interests-item-title-japanese">${title}</div>`,
+    '</a>',
+  ].join('\n');
+}
+
+/**
+ * Card whose rating attribute is present but empty — treated as markup failure.
+ */
+function cardWithEmptyRating(title = 'カタン') {
+  return ratingCard(title, '');
+}
+
 test('RatingUpdater keeps existing rows when cards match but no titles can be extracted', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   // Fail on the first unextractable card page rather than waiting for the empty
@@ -305,6 +323,71 @@ test('RatingUpdater keeps existing rows when cards match but no titles can be ex
   assert.throws(
     () => context.RatingUpdater.run(),
     /Bodoge ratings page contained cards without extractable Japanese titles/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when cards have titles but no rating markup', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Regression: a changed rating attribute must not write title-only rows that
+  // replace the previous complete Ratings snapshot with empty values.
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: cardWithoutRatingMarkup() },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings page contained cards without extractable ratings/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when every card rating attribute is empty', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: cardWithEmptyRating() },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings page contained cards without extractable ratings/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when a later page has titles but no extractable ratings', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Earlier pages with real rows must not be written when a later page yields
+  // titles without ratings (partial import / changed rating markup mid-run).
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: cardWithoutRatingMarkup('チッキットゥライド') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings page contained cards without extractable ratings/,
   );
   assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
