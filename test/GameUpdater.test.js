@@ -28,10 +28,14 @@ const GAME_BOARD_GAME_RANK_COLUMN = 16;
  */
 function createEmptyGamesSheet() {
   const writes = [];
+  const clears = [];
+  const operations = [];
   const rangeReads = [];
 
   return {
     writes,
+    clears,
+    operations,
     rangeReads,
     getLastRow() {
       // Header only: no data rows to read.
@@ -59,13 +63,25 @@ function createEmptyGamesSheet() {
           );
         },
         setValues(values) {
-          writes.push({
+          const write = {
             a1NotationOrRow,
             column,
             numRows,
             numColumns,
             values,
-          });
+          };
+          writes.push(write);
+          operations.push({ type: 'setValues', ...write });
+        },
+        clearContent() {
+          const clear = {
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          };
+          clears.push(clear);
+          operations.push({ type: 'clearContent', ...clear });
         },
       };
     },
@@ -97,17 +113,28 @@ function createGameRow(index, url) {
 
 /**
  * Keeps the double limited to managed rows so the batch boundary is unambiguous.
+ *
+ * `surplusRowCount` simulates abandoned B–AA cells below the first blank link.
+ * `failOnSetValues` proves surplus clearing runs only after a successful rewrite.
  */
-function createGamesSheet(rows) {
+function createGamesSheet(
+  rows,
+  { surplusRowCount = 0, failOnSetValues = false } = {},
+) {
   const writes = [];
+  const clears = [];
+  const operations = [];
   const rangeReads = [];
 
   return {
     writes,
+    clears,
+    operations,
     rangeReads,
     getLastRow() {
-      // Header plus every managed data row supplied to the double.
-      return rows.length + 1;
+      // Header plus managed rows, plus any abandoned physical rows left below
+      // the blank-link end marker after a shortened Games list.
+      return rows.length + 1 + surplusRowCount;
     },
     getRange(a1NotationOrRow, column, numRows, numColumns) {
       if (typeof a1NotationOrRow === 'string') {
@@ -122,7 +149,11 @@ function createGamesSheet(rows) {
             numRows,
             numColumns,
           });
-          return rows.slice(0, numRows).map((row) => [row.gameLink]);
+          // Surplus rows below the managed block have empty links; the updater
+          // stops at the first blank, so only managed rows are returned as data.
+          return Array.from({ length: numRows }, (_, index) => [
+            index < rows.length ? rows[index].gameLink : null,
+          ]);
         },
         getValues() {
           rangeReads.push({
@@ -131,16 +162,35 @@ function createGamesSheet(rows) {
             numRows,
             numColumns,
           });
-          return rows.slice(0, numRows).map((row) => row.values.slice());
+          return Array.from({ length: numRows }, (_, index) =>
+            index < rows.length
+              ? rows[index].values.slice()
+              : Array(numColumns).fill('stale'),
+          );
         },
         setValues(values) {
-          writes.push({
+          if (failOnSetValues) {
+            throw new Error('setValues failed');
+          }
+          const write = {
             a1NotationOrRow,
             column,
             numRows,
             numColumns,
             values,
-          });
+          };
+          writes.push(write);
+          operations.push({ type: 'setValues', ...write });
+        },
+        clearContent() {
+          const clear = {
+            row: a1NotationOrRow,
+            column,
+            numRows,
+            numColumns,
+          };
+          clears.push(clear);
+          operations.push({ type: 'clearContent', ...clear });
         },
       };
 
@@ -358,6 +408,88 @@ test('GameUpdater bounds Games sheet reads to getLastRow instead of open-ended A
   gamesSheet.writes.length = 0;
   assert.equal(context.GameUpdater.run(), false);
   assert.deepEqual(gamesSheet.rangeReads, []);
+});
+
+test('GameUpdater writes Games values then clears surplus B–AA rows', () => {
+  const rows = [
+    createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+    createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+  ];
+  // Two abandoned physical rows remain below the blank-link end marker after a
+  // shortened list; their B–AA cells must be trimmed after a successful write.
+  const gamesSheet = createGamesSheet(rows, { surplusRowCount: 2 });
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => ({});
+  context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+
+  // Write first so a failed setValues cannot wipe managed Games values, then
+  // trim only abandoned B–AA cells; column A is left alone for rich-text links.
+  assert.deepEqual(
+    gamesSheet.operations.map((operation) => operation.type),
+    ['setValues', 'clearContent'],
+  );
+  assert.deepEqual(gamesSheet.clears, [
+    { row: 4, column: 2, numRows: 2, numColumns: 26 },
+  ]);
+  assert.equal(gamesSheet.writes[0].values.length, 2);
+  assert.equal(gamesSheet.writes[0].column, 2);
+});
+
+test('GameUpdater leaves Games intact when setValues fails before surplus clear', () => {
+  const rows = [
+    createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+  ];
+  const gamesSheet = createGamesSheet(rows, {
+    surplusRowCount: 2,
+    failOnSetValues: true,
+  });
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => ({});
+  context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+  };
+
+  assert.throws(() => context.GameUpdater.run(), /setValues failed/);
+
+  // Clearing must not run after a write failure; otherwise managed B–AA values
+  // would disappear even though BoardGameGeek cannot restore the prior snapshot.
+  assert.deepEqual(gamesSheet.operations, []);
+  assert.deepEqual(gamesSheet.clears, []);
+  assert.deepEqual(gamesSheet.writes, []);
 });
 
 test('GameUpdater clears formula inputs only for Games rows refreshed within the batch', () => {
