@@ -35,8 +35,18 @@ function compileSource(relativePath, exportNames) {
 /**
  * Evaluates source files in order so a test can provide only the dependencies
  * required for the behavior under test.
+ *
+ * Host `Error` is shared into the sandbox so `instanceof Error` in production
+ * helpers such as `getErrorMessage` stays true for doubles that throw from
+ * outside the VM. Without that share, the VM's separate `Error` constructor
+ * makes host-thrown errors fall through to `String(error)` and assert log
+ * text that Apps Script would never emit.
  */
 function loadScripts(sandbox, scripts) {
+  if (!Object.hasOwn(sandbox, 'Error')) {
+    sandbox.Error = Error;
+  }
+
   const context = vm.createContext(sandbox);
 
   for (const script of scripts) {

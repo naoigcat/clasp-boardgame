@@ -194,7 +194,7 @@ test('update still schedules games when ranking import fails', () => {
     ['ensureTrigger', 'update', 5],
   ]);
   assert.deepEqual(sandbox.logs, [
-    'Ranking update failed: Error: BGA catalog unavailable',
+    'Ranking update failed: BGA catalog unavailable',
   ]);
 });
 
@@ -219,7 +219,7 @@ test('update still schedules games when rating import fails', () => {
     ['ensureTrigger', 'update', 5],
   ]);
   assert.deepEqual(sandbox.logs, [
-    'Rating update failed: Error: Bodoge HTML unrecognized',
+    'Rating update failed: Bodoge HTML unrecognized',
   ]);
 });
 
@@ -245,7 +245,7 @@ test('update still schedules games when both sync imports fail', () => {
     ['ensureTrigger', 'update', 5],
   ]);
   assert.deepEqual(sandbox.logs, [
-    'Ranking update failed: Error: BGA catalog unavailable',
-    'Rating update failed: Error: Bodoge HTML unrecognized',
+    'Ranking update failed: BGA catalog unavailable',
+    'Rating update failed: Bodoge HTML unrecognized',
   ]);
 });
