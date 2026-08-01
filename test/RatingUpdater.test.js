@@ -328,6 +328,32 @@ test('RatingUpdater keeps existing rows when cards match but no titles can be ex
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
+test('RatingUpdater keeps existing rows when title cleanup leaves only an empty string', () => {
+  // Regression: edition/expansion markers, whitespace, or slash-only titles
+  // normalize to "" and must not be written as blank Ratings rows.
+  const emptyAfterCleanupTitles = ['（拡張）', '：新版', '   ', '/'];
+  for (const title of emptyAfterCleanupTitles) {
+    const ratingsSheet = createSheet('Ratings', 3);
+    const sandbox = createRatingSandbox({
+      ratingsSheet,
+      userId: 'user-1',
+      responses: [
+        { status: 200, body: ratingCard(title, '4') },
+        { status: 200, body: emptyPlayedGamesPage() },
+      ],
+    });
+    const context = loadRatingUpdater(sandbox);
+
+    assert.throws(
+      () => context.RatingUpdater.run(),
+      /Bodoge ratings page contained cards without extractable Japanese titles/,
+      `expected abort for cleaned-empty title ${JSON.stringify(title)}`,
+    );
+    assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+    assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+  }
+});
+
 test('RatingUpdater keeps existing rows when cards have titles but no rating markup', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   // Regression: a changed rating attribute must not write title-only rows that
