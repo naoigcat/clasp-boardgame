@@ -308,6 +308,28 @@ function createGameItemWithTenAndElevenPlayerRecommendations() {
 }
 
 /**
+ * Supplies a Date stand-in whose `now()` advances under test control.
+ *
+ * Prototype sharing keeps host-created Date values passing `instanceof Date`
+ * checks inside the VM while runtime-budget helpers read the fake clock.
+ */
+function createClockDate(initialMs = 0) {
+  const clock = { nowMs: initialMs };
+  function ClockDate(...args) {
+    if (args.length === 0) {
+      return new Date(clock.nowMs);
+    }
+
+    return new Date(...args);
+  }
+  ClockDate.now = () => clock.nowMs;
+  ClockDate.parse = Date.parse;
+  ClockDate.UTC = Date.UTC;
+  ClockDate.prototype = Date.prototype;
+  return { ClockDate, clock };
+}
+
+/**
  * Loads the dependencies evaluated by GameUpdater before it begins API work.
  */
 function loadGameUpdater(sandbox) {
@@ -492,13 +514,16 @@ test('GameUpdater leaves Games intact when setValues fails before surplus clear'
   assert.deepEqual(gamesSheet.writes, []);
 });
 
-test('GameUpdater clears formula inputs only for Games rows refreshed within the batch', () => {
+test('GameUpdater clears formula inputs only for Games rows refreshed within the runtime budget', () => {
   const rows = Array.from({ length: 51 }, (_, index) =>
     createGameRow(index, `https://boardgamegeek.com/boardgame/${index + 1}`),
   );
   const gamesSheet = createGamesSheet(rows);
+  // Start after the fixture last-updated dates so rows stay stale while Date.now
+  // advances only for the soft runtime budget.
+  const { ClockDate, clock } = createClockDate(Date.UTC(2024, 0, 1));
   const context = loadGameUpdater({
-    Date,
+    Date: ClockDate,
     Logger: {
       log() {},
     },
@@ -513,7 +538,13 @@ test('GameUpdater clears formula inputs only for Games rows refreshed within the
     },
   });
 
-  context.GameUpdater.fetchGameItem = () => ({});
+  // Fifty successful fetches exhaust the soft 180s budget before the 51st row.
+  const runtimeStepMs =
+    context.UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS / 50;
+  context.GameUpdater.fetchGameItem = () => {
+    clock.nowMs += runtimeStepMs;
+    return {};
+  };
   context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
     row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
   };
@@ -561,7 +592,10 @@ test('GameUpdater preserves formula inputs when a game refresh fails', () => {
 
 test('GameUpdater advances past permanently failing head rows on the next batch', () => {
   const failingRows = Array.from({ length: 50 }, (_, index) =>
-    createGameRow(index, 'not-a-boardgamegeek-url'),
+    createGameRow(
+      index,
+      `https://boardgamegeek.com/boardgame/${index + 1000}`,
+    ),
   );
   const successRow = createGameRow(
     50,
@@ -569,8 +603,10 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
   );
   const rows = [...failingRows, successRow];
   const gamesSheet = createGamesSheet(rows);
+  const batchStartedAtMs = Date.UTC(2024, 0, 1);
+  const { ClockDate, clock } = createClockDate(batchStartedAtMs);
   const context = loadGameUpdater({
-    Date,
+    Date: ClockDate,
     Logger: {
       log() {},
     },
@@ -585,7 +621,18 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
     },
   });
 
-  context.GameUpdater.fetchGameItem = () => ({});
+  // Each failed head row spends an equal share of the soft budget so the first
+  // invocation stops before the still-stale success row is reached.
+  const runtimeStepMs =
+    context.UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS / 50;
+  context.GameUpdater.fetchGameItem = (gameReference) => {
+    clock.nowMs += runtimeStepMs;
+    if (gameReference.id === '42') {
+      return {};
+    }
+
+    throw new Error('permanent upstream failure');
+  };
   context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
     row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
   };
@@ -602,6 +649,7 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
     rows[index].values = values;
   });
   gamesSheet.writes.length = 0;
+  clock.nowMs = batchStartedAtMs;
 
   assert.equal(context.GameUpdater.run(), false);
   assert.deepEqual(

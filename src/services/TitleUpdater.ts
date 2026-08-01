@@ -42,19 +42,30 @@ class TitleUpdater {
       (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
     );
     const retryingOnlyFailures = preferredRows.length === 0;
-    const batchRows = (
-      retryingOnlyFailures ? pendingRows : preferredRows
-    ).slice(0, UPDATE_QUEUE_CONFIG.TITLE_BATCH_SIZE);
+    const candidateRows = retryingOnlyFailures ? pendingRows : preferredRows;
+    const startedAtMilliseconds = Date.now();
+    let stoppedForRuntime = false;
 
-    batchRows.forEach((row) => {
+    for (const row of candidateRows) {
+      if (
+        hasExceededRuntime(
+          startedAtMilliseconds,
+          UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS,
+        )
+      ) {
+        stoppedForRuntime = true;
+        break;
+      }
+
       TitleUpdater.updateRow(row);
-    });
+    }
 
     TitleUpdater.writeRows(titlesSheet, rows);
     if (retryingOnlyFailures) {
-      // One retry pass is enough for this cycle; remaining failures wait for a
-      // later update instead of holding the shared trigger open forever.
-      return false;
+      // One completed retry pass ends the cycle. If the soft runtime budget
+      // stopped the pass early, keep the trigger so remaining failures still
+      // receive their one retry before permanent errors wait for a later update.
+      return stoppedForRuntime;
     }
 
     if (

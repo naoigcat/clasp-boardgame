@@ -30,10 +30,13 @@ type PlayerRecommendations = Record<string, string>;
 /**
  * Tracks work consumed by the current Apps Script invocation.
  *
- * The batch size is enforced through this counter rather than by slicing the
- * sorted list up front so skipped fresh rows do not consume quota slots.
+ * The soft runtime budget is checked before each eligible row rather than by
+ * slicing the sorted list up front so skipped fresh rows do not consume time
+ * budget slots, and partial progress can still flush before a hard timeout.
  */
 interface GameBatchProgress {
+  /** Epoch milliseconds when this invocation began processing rows. */
+  readonly startedAtMilliseconds: number;
   /** Number of source rows attempted in this invocation. */
   processedCount: number;
 }
@@ -65,7 +68,10 @@ class GameUpdater {
       return false;
     }
 
-    const progress: GameBatchProgress = { processedCount: 0 };
+    const progress: GameBatchProgress = {
+      startedAtMilliseconds: Date.now(),
+      processedCount: 0,
+    };
     try {
       GameUpdater.sortByOldestUpdate(rows).forEach((row) => {
         GameUpdater.updateRow(row, current, progress);
@@ -232,7 +238,10 @@ class GameUpdater {
     if (
       gameUrl === null ||
       !GameUpdater.needsRefresh(row, current) ||
-      progress.processedCount >= UPDATE_QUEUE_CONFIG.GAME_BATCH_SIZE
+      hasExceededRuntime(
+        progress.startedAtMilliseconds,
+        UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS,
+      )
     ) {
       return;
     }

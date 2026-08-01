@@ -34,11 +34,34 @@ function loadTitleUpdaterService(sandbox) {
     { path: 'src/config/AppConfig.ts', exports: [] },
     { path: 'src/config/SheetSchema.ts', exports: [] },
     { path: 'src/config/TitleRules.ts', exports: [] },
+    { path: 'src/shared/DateUtils.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/services/TitleUpdater.ts', exports: ['TitleUpdater'] },
   ]);
+}
+
+/**
+ * Supplies a Date stand-in whose `now()` advances under test control.
+ *
+ * Prototype sharing keeps host-created Date values passing `instanceof Date`
+ * checks inside the VM while runtime-budget helpers read the fake clock.
+ */
+function createClockDate(initialMs = 0) {
+  const clock = { nowMs: initialMs };
+  function ClockDate(...args) {
+    if (args.length === 0) {
+      return new Date(clock.nowMs);
+    }
+
+    return new Date(...args);
+  }
+  ClockDate.now = () => clock.nowMs;
+  ClockDate.parse = Date.parse;
+  ClockDate.UTC = Date.UTC;
+  ClockDate.prototype = Date.prototype;
+  return { ClockDate, clock };
 }
 
 /**
@@ -49,6 +72,7 @@ function createTitleSandbox({
   responses,
   failOnSetValues = false,
   rankingUrls = [],
+  DateConstructor = Date,
 }) {
   const responseQueue = [...responses];
   const writes = [];
@@ -176,6 +200,7 @@ function createTitleSandbox({
     Logger: {
       log() {},
     },
+    Date: DateConstructor,
   };
 }
 
@@ -341,6 +366,38 @@ test('TitleUpdater records empty normalization as an error and ends the preferre
   written = sandbox.titlesSheet.writes[0].values;
   assert.equal(written[0][TITLE_NORMALIZED_COLUMN], '');
   assert.equal(written[0][TITLE_ERROR_COLUMN], 'normalized title is empty');
+});
+
+test('TitleUpdater stops starting title fetches once the soft runtime budget elapses', () => {
+  const titleRows = Array.from({ length: 3 }, (_, index) => [
+    `https://example.com/${index + 1}`,
+    '',
+    '',
+    '',
+  ]);
+  const { ClockDate, clock } = createClockDate(0);
+  const sandbox = createTitleSandbox({
+    titleRows,
+    DateConstructor: ClockDate,
+    responses: [
+      { status: 200, body: titlePage('カタン') },
+      { status: 200, body: titlePage('カルカソンヌ') },
+      { status: 200, body: titlePage('チケットトゥライド') },
+    ],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+  const originalSleep = sandbox.Utilities.sleep;
+  sandbox.Utilities.sleep = () => {
+    clock.nowMs += context.UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS;
+    originalSleep();
+  };
+
+  assert.equal(context.TitleUpdater.run(), true);
+
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
+  assert.equal(written[1][TITLE_NORMALIZED_COLUMN], '');
+  assert.equal(written[2][TITLE_NORMALIZED_COLUMN], '');
 });
 
 test('TitleUpdater prefers unfailed title rows over permanently failing head rows', () => {

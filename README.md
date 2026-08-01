@@ -12,7 +12,7 @@ groups the implementation by responsibility:
 - `src/entrypoints/` — Apps Script functions discovered by name (`onOpen`, `update`)
 - `src/services/` — update orchestration and sheet-specific business logic
 - `src/infrastructure/` — Apps Script API adapters for HTTP, properties, triggers, and sheets
-- `src/config/` — sheet layouts, endpoints, batch limits, and source-specific title rules
+- `src/config/` — sheet layouts, endpoints, runtime limits, and source-specific title rules
 - `src/shared/` — parsing and error-handling utilities shared by services
 
 The unified `update` command refreshes rankings and ratings immediately, then
@@ -29,11 +29,12 @@ Apps Script execution:
    Bodoge in the initial execution.
 2. The coordinator saves the Games phase and creates one five-minute,
    time-driven trigger.
-3. Each trigger execution refreshes at most 50 stale BoardGameGeek game rows.
-   A game is stale when it has never been updated or its last update attempt
-   is seven days old or older.
-4. Once Games is complete, each subsequent execution normalizes at most 100
-   Board Game Arena titles.
+3. Each trigger execution refreshes stale BoardGameGeek game rows until about
+   180 seconds have elapsed. A game is stale when it has never been updated or
+   its last update attempt is seven days old or older. Remaining stale rows
+   resume on the next trigger.
+4. Once Games is complete, each subsequent execution normalizes Board Game
+   Arena titles under the same 180-second soft limit.
 5. The trigger and transient queue state are removed after the final title
    batch.
 
