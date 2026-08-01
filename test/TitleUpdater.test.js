@@ -312,10 +312,43 @@ test('TitleUpdater reports no remaining work when every title is already normali
   const context = loadTitleUpdaterService(sandbox);
 
   // Incomplete determination must treat a blank pending count as done without
-  // fetching or rewriting Titles, matching countPendingRows in run().
+  // fetching, while still rewriting Titles so blank-URL compaction can run.
   assert.equal(context.TitleUpdater.run(), false);
-  assert.deepEqual(sandbox.titlesSheet.writes, []);
-  assert.deepEqual(sandbox.titlesSheet.operations, []);
+  assert.equal(sandbox.titlesSheet.writes.length, 1);
+  assert.deepEqual(sandbox.titlesSheet.writes[0].values, titleRows);
+  assert.deepEqual(
+    sandbox.titlesSheet.operations.map((operation) => operation.type),
+    ['setValues'],
+  );
+});
+
+test('TitleUpdater compacts mid-sheet blanks when every title is already normalized', () => {
+  const titleRows = [
+    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['', '', '', ''],
+    ['https://example.com/b', 'カルカソンヌ', 'カルカソンヌ', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // Pending-free Titles must still flush loadRows compaction; otherwise empty
+  // URL slots remain until a later pending row forces a rewrite.
+  assert.equal(context.TitleUpdater.run(), false);
+  assert.deepEqual(
+    sandbox.titlesSheet.operations.map((operation) => operation.type),
+    ['setValues', 'clearContent'],
+  );
+  assert.deepEqual(sandbox.titlesSheet.clears, [
+    { row: 4, column: 1, numRows: 1, numColumns: 4 },
+  ]);
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written.length, 2);
+  assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/a');
+  assert.equal(written[1][TITLE_URL_COLUMN], 'https://example.com/b');
+  assert.equal(written[1][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
 });
 
 test('TitleUpdater keeps the queue alive when only failed pending titles remain', () => {
