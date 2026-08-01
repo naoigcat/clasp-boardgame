@@ -30,6 +30,9 @@ class TitleUpdater {
     // countPendingRows is the incomplete gate so the early exit and the final
     // queue-alive decision share one definition of "still needs a title".
     if (TitleUpdater.countPendingRows(rows) === 0) {
+      // Still compact blank URL slots when every title is already normalized so
+      // mid-sheet empty rows do not linger until the next pending URL appears.
+      TitleUpdater.writeRows(titlesSheet, rows);
       return false;
     }
 
