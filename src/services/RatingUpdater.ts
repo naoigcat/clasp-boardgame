@@ -228,6 +228,8 @@ class RatingUpdater {
    *
    * Bodoge cards often include English/Japanese pairs, edition labels, and
    * expansion markers that would break joins against the spreadsheet's titles.
+   * Returns null when cleanup leaves nothing importable so callers can abort
+   * instead of writing blank title rows that wipe the prior Ratings snapshot.
    */
   private static extractSourceTitle(cardHtml: string): string | null {
     const titleMatch = cardHtml.match(
@@ -237,17 +239,23 @@ class RatingUpdater {
       return null;
     }
 
-    return (
-      titleMatch[1]
-        // Keep the Japanese segment when English and Japanese are slash-separated.
-        .split('/')[0]
-        // Drop parenthetical notes that are not part of the canonical title.
-        .replace(/（.*）/, '')
-        .replace('：新版', '')
-        .replace('（拡張）', '')
-        .replace('&amp;', '＆')
-        .trim()
-    );
+    const cleanedTitle = titleMatch[1]
+      // Keep the Japanese segment when English and Japanese are slash-separated.
+      .split('/')[0]
+      // Drop parenthetical notes that are not part of the canonical title.
+      .replace(/（.*）/, '')
+      .replace('：新版', '')
+      .replace('（拡張）', '')
+      .replace('&amp;', '＆')
+      .trim();
+
+    // Edition/expansion-only (or otherwise empty) cleanup results are not
+    // importable titles; treat them like a missing Japanese title.
+    if (cleanedTitle.length === 0) {
+      return null;
+    }
+
+    return cleanedTitle;
   }
 
   /**
