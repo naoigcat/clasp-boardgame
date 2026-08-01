@@ -9,7 +9,14 @@ type RatingSheetRow = [string, string];
 interface RatingPage {
   /** Whether the page contains cards, which signals that pagination continues. */
   readonly hasCards: boolean;
-  /** Ratings successfully extracted from the page. */
+  /**
+   * True when at least one card matched but had no Japanese title to extract.
+   * Distinct from an all-excluded page, which has cards and zero rows without
+   * setting this flag, so pagination can continue without treating exclusions
+   * as a markup failure.
+   */
+  readonly hasUnextractableCards: boolean;
+  /** Ratings successfully extracted from the page after exclusions/aliases. */
   readonly rows: readonly RatingSheetRow[];
 }
 
@@ -116,6 +123,15 @@ class RatingUpdater {
       }
 
       sawCards = true;
+      // A later page with card chrome but no Japanese titles must not let earlier
+      // pages publish a partial Ratings snapshot; fail the whole import instead.
+      // Excluded-title-only pages still report hasUnextractableCards=false so
+      // pagination can skip them without treating intentional omissions as loss.
+      if (page.hasUnextractableCards) {
+        throw new Error(
+          'Bodoge ratings page contained cards without extractable Japanese titles',
+        );
+      }
       rows.push(...page.rows);
       Utilities.sleep(BODOGE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
@@ -147,10 +163,14 @@ class RatingUpdater {
       pageHtml.match(/<a class="list--interests-item-title"[\s\S]*?<\/a>/g) ??
       [];
     const rows: RatingSheetRow[] = [];
+    let hasUnextractableCards = false;
 
     cards.forEach((card) => {
       const sourceTitle = RatingUpdater.extractSourceTitle(card);
       if (sourceTitle === null) {
+        // Card matched but title extraction failed; callers must not treat this
+        // the same as an excluded title (which still extracts, then drops).
+        hasUnextractableCards = true;
         return;
       }
 
@@ -162,11 +182,11 @@ class RatingUpdater {
     });
 
     if (cards.length > 0) {
-      return { hasCards: true, rows };
+      return { hasCards: true, hasUnextractableCards, rows };
     }
 
     if (pageHtml.includes(BODOGE_EMPTY_PLAYED_GAMES_MARKER)) {
-      return { hasCards: false, rows: [] };
+      return { hasCards: false, hasUnextractableCards: false, rows: [] };
     }
 
     throw new Error('Unrecognized Bodoge ratings page HTML');

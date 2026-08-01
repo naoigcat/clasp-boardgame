@@ -47,15 +47,17 @@ function clearSheetDataRows(
 /**
  * Clears only rows below a just-written data block.
  *
- * Snapshot sheets (Titles, Rankings, Ratings) write first, then trim abandoned
- * physical rows. Clearing after setValues avoids a window where a failed rewrite
- * would leave a header-only sheet and erase data that cannot be restored until
- * the next successful fetch.
+ * Titles, Rankings, Ratings, and Games write first, then trim abandoned physical
+ * rows. Clearing after setValues avoids a window where a failed rewrite would
+ * leave a header-only sheet and erase data that cannot be restored until the
+ * next successful fetch. Games passes a start column of B so surplus cleanup
+ * never touches BoardGameGeek rich-text links in column A.
  */
 function clearSurplusSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   writtenRowCount: number,
   columnCount: number,
+  startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
 ): void {
   const firstSurplusRow = SHEET_LAYOUT.FIRST_DATA_ROW + writtenRowCount;
   const surplusRowCount = sheet.getLastRow() - firstSurplusRow + 1;
@@ -64,11 +66,6 @@ function clearSurplusSheetDataRows(
   }
 
   sheet
-    .getRange(
-      firstSurplusRow,
-      SHEET_LAYOUT.DEFAULT_START_COLUMN,
-      surplusRowCount,
-      columnCount,
-    )
+    .getRange(firstSurplusRow, startColumn, surplusRowCount, columnCount)
     .clearContent();
 }

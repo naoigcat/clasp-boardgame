@@ -275,23 +275,102 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
-test('RatingUpdater keeps existing rows when cards match but no titles can be extracted', () => {
-  const ratingsSheet = createSheet('Ratings', 3);
-  // Outer card wrapper is present so parsePage sets hasCards, but the Japanese
-  // title div is missing so extraction yields zero rows. Reaching the empty
-  // marker must throw rather than treating the import as an explicit empty list.
-  const cardWithoutJapaneseTitle = [
+/**
+ * Card chrome without a Japanese title div — hasCards true, extraction fails.
+ */
+function cardWithoutJapaneseTitle(englishTitle = 'Catan') {
+  return [
     '<a class="list--interests-item-title">',
-    '<div class="list--interests-item-title-english">Catan</div>',
+    `<div class="list--interests-item-title-english">${englishTitle}</div>`,
     '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="5">',
     '</div>',
     '</a>',
   ].join('\n');
+}
+
+test('RatingUpdater keeps existing rows when cards match but no titles can be extracted', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Fail on the first unextractable card page rather than waiting for the empty
+  // marker; otherwise a later empty page could be mistaken for a clean empty list.
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
     responses: [
-      { status: 200, body: cardWithoutJapaneseTitle },
+      { status: 200, body: cardWithoutJapaneseTitle() },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings page contained cards without extractable Japanese titles/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater keeps existing rows when a later page has cards but no extractable titles', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Regression: earlier pages with real rows must not be written when a later
+  // page matches card HTML yet yields zero titles (partial import).
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: cardWithoutJapaneseTitle('Ticket to Ride') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings page contained cards without extractable Japanese titles/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater skips an excluded-title-only page after earlier importable rows', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Exclusions still extract a source title, so they must not be treated as the
+  // same failure mode as missing Japanese titles mid-pagination.
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: ratingCard('ドミニオン：基本カードセット', '3') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 1,
+      numColumns: 2,
+      values: [['カタン', '5']],
+    },
+  ]);
+});
+
+test('RatingUpdater keeps existing rows when every card title is excluded', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Extractable-but-excluded cards are not unextractable; reaching the empty
+  // marker with zero importable rows must still abort instead of clearing.
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('ドミニオン：基本カードセット', '3') },
       { status: 200, body: emptyPlayedGamesPage() },
     ],
   });

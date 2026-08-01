@@ -128,7 +128,9 @@ class GameUpdater {
    * Writes columns B through AA for every managed game row in one operation.
    *
    * Column A is omitted on purpose so BoardGameGeek hyperlinks are not replaced
-   * by plain-text URLs during the batch flush.
+   * by plain-text URLs during the batch flush. After a successful write, surplus
+   * B–AA cells below the last managed link are cleared so a shortened list cannot
+   * leave stale metadata that formulas or manual review would misread.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -146,6 +148,12 @@ class GameUpdater {
         rows[0].values.length,
       )
       .setValues(rows.map((row) => row.values));
+    clearSurplusSheetDataRows(
+      sheet,
+      rows.length,
+      SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
+      SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
+    );
   }
 
   /**
