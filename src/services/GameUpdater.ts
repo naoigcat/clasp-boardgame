@@ -65,6 +65,10 @@ class GameUpdater {
     // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
     if (GameUpdater.countPendingRows(rows, current) === 0) {
+      // Still flush surplus B–AA cleanup when every managed link is fresh so a
+      // shortened column-A list cannot leave orphaned metadata until the next
+      // stale refresh, including the empty-list case after all links are removed.
+      GameUpdater.writeRows(sheet, rows);
       return false;
     }
 
@@ -136,13 +140,21 @@ class GameUpdater {
    * Column A is omitted on purpose so BoardGameGeek hyperlinks are not replaced
    * by plain-text URLs during the batch flush. After a successful write, surplus
    * B–AA cells below the last managed link are cleared so a shortened list cannot
-   * leave stale metadata that formulas or manual review would misread.
+   * leave stale metadata that formulas or manual review would misread. An empty
+   * managed list skips setValues and clears every B–AA data row the same way
+   * Titles and Ratings clear on an empty write, without touching column A.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     rows: readonly GameSheetRow[],
   ): void {
     if (rows.length === 0) {
+      clearSurplusSheetDataRows(
+        sheet,
+        0,
+        SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
+        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
+      );
       return;
     }
 

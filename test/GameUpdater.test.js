@@ -476,10 +476,97 @@ test('GameUpdater writes Games values then clears surplus B–AA rows', () => {
   assert.equal(gamesSheet.writes[0].column, 2);
 });
 
-test('GameUpdater leaves Games intact when setValues fails before surplus clear', () => {
+test('GameUpdater clears surplus B–AA rows when every managed game is still fresh', () => {
   const rows = [
     createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+    createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
   ];
+  // Within the seven-day refresh window so countPendingRows is zero; surplus
+  // cleanup must still run after column A was shortened.
+  rows.forEach((row) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(2024, 5, 14);
+  });
+  const gamesSheet = createGamesSheet(rows, { surplusRowCount: 2 });
+  const { ClockDate } = createClockDate(Date.UTC(2024, 5, 15));
+  let fetchCount = 0;
+  const context = loadGameUpdater({
+    Date: ClockDate,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => {
+    fetchCount += 1;
+    return {};
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 0);
+  // Fresh rows still rewrite current B–AA values, then trim abandoned cells so
+  // a pending-free early exit cannot skip surplus cleanup.
+  assert.deepEqual(
+    gamesSheet.operations.map((operation) => operation.type),
+    ['setValues', 'clearContent'],
+  );
+  assert.deepEqual(gamesSheet.clears, [
+    { row: 4, column: 2, numRows: 2, numColumns: 26 },
+  ]);
+  assert.equal(gamesSheet.writes[0].values.length, 2);
+  assert.equal(gamesSheet.writes[0].column, 2);
+});
+
+test('GameUpdater clears all B–AA data rows when the managed Games list is empty', () => {
+  // First blank link ends the managed block immediately, but abandoned B–AA
+  // cells can remain after every column-A link is deleted.
+  const gamesSheet = createGamesSheet([], { surplusRowCount: 3 });
+  let fetchCount = 0;
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => {
+    fetchCount += 1;
+    return {};
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 0);
+  // Empty managed lists skip setValues and clear B–AA from the first data row,
+  // matching Titles/Ratings empty-write cleanup without touching column A.
+  assert.deepEqual(
+    gamesSheet.operations.map((operation) => operation.type),
+    ['clearContent'],
+  );
+  assert.deepEqual(gamesSheet.clears, [
+    { row: 2, column: 2, numRows: 3, numColumns: 26 },
+  ]);
+  assert.deepEqual(gamesSheet.writes, []);
+});
+
+test('GameUpdater leaves Games intact when setValues fails before surplus clear', () => {
+  const rows = [createGameRow(0, 'https://boardgamegeek.com/boardgame/1')];
   const gamesSheet = createGamesSheet(rows, {
     surplusRowCount: 2,
     failOnSetValues: true,
@@ -592,10 +679,7 @@ test('GameUpdater preserves formula inputs when a game refresh fails', () => {
 
 test('GameUpdater advances past permanently failing head rows on the next batch', () => {
   const failingRows = Array.from({ length: 50 }, (_, index) =>
-    createGameRow(
-      index,
-      `https://boardgamegeek.com/boardgame/${index + 1000}`,
-    ),
+    createGameRow(index, `https://boardgamegeek.com/boardgame/${index + 1000}`),
   );
   const successRow = createGameRow(
     50,
