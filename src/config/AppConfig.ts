@@ -38,15 +38,12 @@ const UPDATE_QUEUE_CONFIG = {
    */
   TRIGGER_INTERVAL_MINUTES: 5,
   /**
-   * Games processed per invocation. Sized so delayed BoardGameGeek requests
-   * usually finish inside one Apps Script execution.
+   * Soft stop for one Games or Titles invocation.
+   *
+   * Apps Script may hard-timeout near six minutes; leaving at three minutes
+   * flushes partial progress and lets the next trigger continue remaining rows.
    */
-  GAME_BATCH_SIZE: 50,
-  /**
-   * Titles normalized per invocation. Higher than the game batch because each
-   * title fetch is cheaper and paced with a shorter delay.
-   */
-  TITLE_BATCH_SIZE: 100,
+  MAX_RUNTIME_MILLISECONDS: 180000,
   /**
    * Days a successful or failed game fetch stays ineligible. Failures advance
    * the timestamp too so permanent errors do not monopolize oldest-first batches.

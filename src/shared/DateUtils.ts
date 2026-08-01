@@ -23,3 +23,17 @@ function isWithinRefreshWindow(
 ): boolean {
   return addDays(timestamp, refreshIntervalDays) > current;
 }
+
+/**
+ * Determines whether an Apps Script invocation has used its soft time budget.
+ *
+ * Games and Titles stop starting new upstream requests once this returns true so
+ * progress can be flushed before the platform's hard execution limit aborts the
+ * run. Remaining rows resume on the next shared trigger.
+ */
+function hasExceededRuntime(
+  startedAtMilliseconds: number,
+  maxRuntimeMilliseconds: number,
+): boolean {
+  return Date.now() - startedAtMilliseconds >= maxRuntimeMilliseconds;
+}
