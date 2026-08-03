@@ -10,6 +10,8 @@ interface GameSheetRow {
   readonly gameLink: GoogleAppsScript.Spreadsheet.RichTextValue | null;
   /** Values from columns B through AA, in their original sheet order. */
   readonly values: SpreadsheetCellRow;
+  /** Whether this invocation attempted a BoardGameGeek refresh for the row. */
+  refreshAttempted: boolean;
 }
 
 /**
@@ -126,6 +128,7 @@ class GameUpdater {
     const rows = linkValues.map((linkRow, index) => ({
       gameLink: linkRow[0],
       values: valueRows[index] as SpreadsheetCellRow,
+      refreshAttempted: false,
     }));
     const firstEmptyRowIndex = rows.findIndex(
       (row) => row.gameLink === null || row.gameLink.getText().length === 0,
@@ -165,13 +168,31 @@ class GameUpdater {
         rows.length,
         rows[0].values.length,
       )
-      .setValues(rows.map((row) => row.values));
+      .setValues(rows.map((row) => GameUpdater.valuesForWrite(row)));
     clearSurplusSheetDataRows(
       sheet,
       rows.length,
       SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
       SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
     );
+  }
+
+  /**
+   * Prevents skipped rows from restoring stale cross-sheet values on flush.
+   *
+   * Failed refreshes keep their prior values for troubleshooting and retry
+   * continuity; only rows that were not attempted need this write-time guard.
+   */
+  private static valuesForWrite(row: GameSheetRow): SpreadsheetCellRow {
+    const values = row.values.slice();
+    if (row.refreshAttempted) {
+      return values;
+    }
+
+    GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
+      values[column] = null;
+    });
+    return values;
   }
 
   /**
@@ -258,6 +279,7 @@ class GameUpdater {
       return;
     }
 
+    row.refreshAttempted = true;
     progress.processedCount += 1;
     try {
       const gameReference = GameUpdater.parseGameReference(gameUrl);

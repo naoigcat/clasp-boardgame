@@ -523,6 +523,10 @@ test('GameUpdater clears surplus B–AA rows when every managed game is still fr
   ]);
   assert.equal(gamesSheet.writes[0].values.length, 2);
   assert.equal(gamesSheet.writes[0].column, 2);
+  assert.deepEqual(
+    getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
+    Array(5).fill(null),
+  );
 });
 
 test('GameUpdater clears all B–AA data rows when the managed Games list is empty', () => {
@@ -601,7 +605,7 @@ test('GameUpdater leaves Games intact when setValues fails before surplus clear'
   assert.deepEqual(gamesSheet.writes, []);
 });
 
-test('GameUpdater clears formula inputs only for Games rows refreshed within the runtime budget', () => {
+test('GameUpdater clears formula inputs for refreshed and skipped Games rows', () => {
   const rows = Array.from({ length: 51 }, (_, index) =>
     createGameRow(index, `https://boardgamegeek.com/boardgame/${index + 1}`),
   );
@@ -643,7 +647,7 @@ test('GameUpdater clears formula inputs only for Games rows refreshed within the
   assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(null));
   assert.deepEqual(
     getArrayFormulaInputs(writtenRows[50]),
-    getArrayFormulaInputs(rows[50].values),
+    Array(5).fill(null),
   );
 });
 
@@ -724,7 +728,7 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
   assert.equal(context.GameUpdater.run(), true);
   assert.deepEqual(
     getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
-    getArrayFormulaInputs(successRow.values),
+    Array(5).fill(null),
   );
 
   // The sheet double reads from the source row objects, so persist the first
