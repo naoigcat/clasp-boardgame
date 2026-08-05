@@ -145,11 +145,12 @@ const BODOGE_CONFIG = {
   /** Delay between pages to avoid burst requests to the source site. */
   REQUEST_DELAY_MILLISECONDS: 1000,
   /**
-   * Hard stop for ratings pagination.
+   * Maximum number of card-bearing ratings pages to import.
    *
-   * Bodoge should eventually return its empty-list marker, but a stuck or
-   * repeating card page must not consume the entire Apps Script runtime and
-   * block Games/Titles trigger creation in the same update cycle.
+   * Bodoge should eventually return its empty-list marker. RatingUpdater may
+   * fetch one page past this cap to observe that marker after a full card
+   * collection, but a stuck or repeating card page must not consume the
+   * entire Apps Script runtime and block Games/Titles trigger creation.
    */
   MAX_PAGE_COUNT: 100,
 } as const;
