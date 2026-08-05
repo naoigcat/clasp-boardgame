@@ -87,9 +87,9 @@ const GAME_VALUE_COLUMN = {
 /**
  * Games columns reset to leave room for dependent array formulas.
  *
- * Cleared with null (not '') after a successful metadata refresh or skipped
- * row write so ARRAYFORMULA can re-expand; a failed fetch still leaves prior
- * derived values.
+ * Cleared with null (not '') on every Games flush so ARRAYFORMULA can
+ * re-expand; writing '' or stale derived values after a failed fetch would
+ * block formulas for the full refresh window.
  */
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [
   GAME_VALUE_COLUMN.DERIVED_TITLE,

@@ -2,8 +2,8 @@
  * GameUpdater batch and refresh-policy tests.
  *
  * Focuses on empty sheets, oldest-first batching, derived-column clearing on
- * success, advancing failure timestamps so permanent errors rotate out, and
- * writing only the real 2–10 player-recommendation columns before rank.
+ * success and failure, advancing failure timestamps so permanent errors rotate
+ * out, and writing only the real 2–10 player-recommendation columns before rank.
  */
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -651,8 +651,13 @@ test('GameUpdater clears formula inputs for refreshed and skipped Games rows', (
   );
 });
 
-test('GameUpdater preserves formula inputs when a game refresh fails', () => {
+test('GameUpdater clears formula inputs when a game refresh fails', () => {
   const row = createGameRow(0, 'not-a-boardgamegeek-url');
+  // Uncalculated derived cells often hold ''; writing them back would block
+  // ARRAYFORMULA for the full refresh window after the failed attempt.
+  GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
+    row.values[column] = '';
+  });
   const gamesSheet = createGamesSheet([row]);
   const context = loadGameUpdater({
     Date,
@@ -674,7 +679,7 @@ test('GameUpdater preserves formula inputs when a game refresh fails', () => {
 
   assert.deepEqual(
     getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
-    getArrayFormulaInputs(row.values),
+    Array(5).fill(null),
   );
   assert.ok(
     gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
@@ -830,7 +835,10 @@ test('GameUpdater keeps prior player recommendations when applyGameItem fails mi
     /Required XML child "statistics" was not found/,
   );
   assert.ok(written[GAME_LAST_UPDATED_AT_COLUMN] instanceof Date);
-  assert.deepEqual(getArrayFormulaInputs(written), priorFormulaInputs);
+  // Derived columns are sheet-owned; failure must still null them even though
+  // BoardGameGeek metadata from before the attempt is preserved.
+  assert.notDeepEqual(priorFormulaInputs, Array(5).fill(null));
+  assert.deepEqual(getArrayFormulaInputs(written), Array(5).fill(null));
 });
 
 test('GameUpdater throttles before raising a non-2xx BoardGameGeek response', () => {
@@ -894,7 +902,7 @@ test('GameUpdater throttles before raising a non-2xx BoardGameGeek response', ()
   );
   assert.deepEqual(
     getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
-    getArrayFormulaInputs(row.values),
+    Array(5).fill(null),
   );
   assert.ok(
     gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
