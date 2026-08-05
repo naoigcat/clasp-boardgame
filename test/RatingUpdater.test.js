@@ -493,15 +493,56 @@ test('RatingUpdater keeps existing rows when every card title is excluded', () =
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
+test('RatingUpdater writes ratings when cards fill exactly MAX_PAGE_COUNT pages then empty marker', () => {
+  const ratingsSheet = createSheet('Ratings', 1);
+  const maxPageCount = 100;
+  const expectedRows = Array.from({ length: maxPageCount }, (_, index) => [
+    `ゲーム${index + 1}`,
+    '3',
+  ]).sort(([firstTitle], [secondTitle]) =>
+    firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
+  );
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    // A full card-page budget must still peek one page for Bodoge's empty
+    // marker; otherwise a legitimate MAX_PAGE_COUNT-page collection would
+    // throw and leave the previous Ratings snapshot forever.
+    responses: [
+      ...Array.from({ length: maxPageCount }, (_, index) => ({
+        status: 200,
+        body: ratingCard(`ゲーム${index + 1}`, '3'),
+      })),
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.equal(context.BODOGE_CONFIG.MAX_PAGE_COUNT, maxPageCount);
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: maxPageCount,
+      numColumns: 2,
+      values: expectedRows,
+    },
+  ]);
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+});
+
 test('RatingUpdater keeps existing rows when Bodoge keeps returning rating cards past the page cap', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   const maxPageCount = 100;
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
-    // One response per allowed page, all with cards and no empty marker, so the
-    // import must stop on the page cap instead of looping until runtime expires.
-    responses: Array.from({ length: maxPageCount }, (_, index) => ({
+    // Card pages through the empty-marker peek mean runaway pagination; abort
+    // without writing so a truncated import cannot replace a complete snapshot.
+    responses: Array.from({ length: maxPageCount + 1 }, (_, index) => ({
       status: 200,
       body: ratingCard(`ゲーム${index + 1}`, '3'),
     })),

@@ -94,9 +94,12 @@ class RatingUpdater {
   /**
    * Fetches and combines Bodoge pages until the first explicit empty page.
    *
-   * Pagination normally ends on Bodoge's empty-list marker. A page cap aborts
-   * runaway card responses so this import cannot exhaust the Apps Script
+   * Pagination normally ends on Bodoge's empty-list marker. Card pages are
+   * capped so a stuck or repeating response cannot exhaust the Apps Script
    * runtime before the rest of the update cycle schedules Games/Titles work.
+   * One extra fetch is allowed after that cap so a collection that fills
+   * exactly MAX_PAGE_COUNT card pages can still observe the empty marker and
+   * publish; cards beyond the cap still abort without writing.
    */
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
@@ -104,9 +107,11 @@ class RatingUpdater {
     // but produced no importable titles (missing Japanese titles, exclusions).
     let sawCards = false;
 
+    // +1 lets a full MAX_PAGE_COUNT card collection still fetch the empty
+    // marker that ends pagination; card pages past the cap throw below.
     for (
       let pageNumber = 1;
-      pageNumber <= BODOGE_CONFIG.MAX_PAGE_COUNT;
+      pageNumber <= BODOGE_CONFIG.MAX_PAGE_COUNT + 1;
       pageNumber += 1
     ) {
       const response = HttpClient.get(
@@ -126,6 +131,14 @@ class RatingUpdater {
           );
         }
         return rows;
+      }
+
+      // Still receiving cards after the budget means runaway pagination; keep
+      // the previous complete Ratings snapshot instead of writing a truncated one.
+      if (pageNumber > BODOGE_CONFIG.MAX_PAGE_COUNT) {
+        throw new Error(
+          `Bodoge ratings pagination exceeded ${BODOGE_CONFIG.MAX_PAGE_COUNT} pages`,
+        );
       }
 
       sawCards = true;
@@ -149,7 +162,8 @@ class RatingUpdater {
       Utilities.sleep(BODOGE_CONFIG.REQUEST_DELAY_MILLISECONDS);
     }
 
-    // Abort without writing so the previous complete Ratings snapshot remains.
+    // Unreachable while the loop bound is MAX_PAGE_COUNT + 1 and card pages
+    // past the cap throw; kept so a future bound change cannot silently return.
     throw new Error(
       `Bodoge ratings pagination exceeded ${BODOGE_CONFIG.MAX_PAGE_COUNT} pages`,
     );
