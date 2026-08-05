@@ -10,8 +10,6 @@ interface GameSheetRow {
   readonly gameLink: GoogleAppsScript.Spreadsheet.RichTextValue | null;
   /** Values from columns B through AA, in their original sheet order. */
   readonly values: SpreadsheetCellRow;
-  /** Whether this invocation attempted a BoardGameGeek refresh for the row. */
-  refreshAttempted: boolean;
 }
 
 /**
@@ -128,7 +126,6 @@ class GameUpdater {
     const rows = linkValues.map((linkRow, index) => ({
       gameLink: linkRow[0],
       values: valueRows[index] as SpreadsheetCellRow,
-      refreshAttempted: false,
     }));
     const firstEmptyRowIndex = rows.findIndex(
       (row) => row.gameLink === null || row.gameLink.getText().length === 0,
@@ -178,17 +175,15 @@ class GameUpdater {
   }
 
   /**
-   * Prevents skipped rows from restoring stale cross-sheet values on flush.
+   * Nulls sheet-owned array-formula columns on every flush.
    *
-   * Failed refreshes keep their prior values for troubleshooting and retry
-   * continuity; only rows that were not attempted need this write-time guard.
+   * Failed refreshes keep prior BoardGameGeek metadata for troubleshooting, but
+   * formula input cells must always be `null`: writing `''` or a stale derived
+   * value blocks ARRAYFORMULA until the next successful clear, which can be as
+   * long as the seven-day refresh window after a failed attempt.
    */
   private static valuesForWrite(row: GameSheetRow): SpreadsheetCellRow {
     const values = row.values.slice();
-    if (row.refreshAttempted) {
-      return values;
-    }
-
     GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
       values[column] = null;
     });
@@ -279,7 +274,6 @@ class GameUpdater {
       return;
     }
 
-    row.refreshAttempted = true;
     progress.processedCount += 1;
     try {
       const gameReference = GameUpdater.parseGameReference(gameUrl);
@@ -298,8 +292,8 @@ class GameUpdater {
    *
    * Uses null rather than an empty string so Apps Script `setValues` truly
    * blanks the cell; empty strings block ARRAYFORMULA from re-expanding into
-   * the cleared cells. Waiting for a completed refresh preserves the previous
-   * derived values when the upstream response is unavailable.
+   * the cleared cells. `valuesForWrite` applies the same nulling for failed
+   * and skipped rows so a refresh error cannot leave blocking blanks.
    */
   private static clearArrayFormulaInputs(row: GameSheetRow): void {
     GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
