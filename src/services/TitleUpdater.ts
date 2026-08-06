@@ -243,6 +243,10 @@ class TitleUpdater {
    * Fetches a Board Game Arena game page and extracts its Japanese title.
    */
   private static fetchSourceTitle(gameUrl: string): string {
+    // Titles/Rankings cells are editable, so reject anything outside the
+    // configured game-panel prefix before UrlFetch can hit an arbitrary host.
+    TitleUpdater.assertAllowedGamePanelUrl(gameUrl);
+
     const response = HttpClient.get(gameUrl);
     if (response.getResponseCode() !== 200) {
       throw new Error(
@@ -254,6 +258,19 @@ class TitleUpdater {
       .getContentText()
       .match(BOARD_GAME_ARENA_TITLE_CONFIG.GAME_NAME_PATTERN);
     return match?.[1] ?? '';
+  }
+
+  /**
+   * Ensures a title scrape URL stays on the configured Board Game Arena panel.
+   *
+   * Rankings normally writes GAME_PANEL_URL rows, but existing Titles cells and
+   * Rankings column A can be edited to any string. Prefix matching against that
+   * constant covers host and path so UrlFetch cannot be redirected elsewhere.
+   */
+  private static assertAllowedGamePanelUrl(gameUrl: string): void {
+    if (!gameUrl.startsWith(BOARD_GAME_ARENA_CONFIG.GAME_PANEL_URL)) {
+      throw new Error(`Unsupported Board Game Arena URL: ${gameUrl}`);
+    }
   }
 
   /**

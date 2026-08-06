@@ -215,7 +215,9 @@ function titlePage(gameName, { compact = false } = {}) {
 }
 
 test('TitleUpdater extracts titles from compacted Board Game Arena markup', () => {
-  const titleRows = [['https://example.com/compact', '', '', '']];
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=compact', '', '', ''],
+  ];
   const sandbox = createTitleSandbox({
     titleRows,
     responses: [{ status: 200, body: titlePage('カタン', { compact: true }) }],
@@ -232,17 +234,57 @@ test('TitleUpdater extracts titles from compacted Board Game Arena markup', () =
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
 });
 
+test('TitleUpdater rejects non-game-panel URLs before fetching', () => {
+  const disallowedUrls = [
+    'https://evil.example/steal',
+    // Host-suffix lookalikes must not satisfy a naive hostname contains check.
+    'https://ja.boardgamearena.com.evil.example/gamepanel?game=catan',
+    'https://ja.boardgamearena.com/other?game=catan',
+  ];
+  const titleRows = disallowedUrls.map((url) => [url, '', '', '']);
+  const sandbox = createTitleSandbox({
+    titleRows,
+    // An empty queue fails the test if UrlFetchApp.fetch is reached.
+    responses: [],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  // Preferred pass records the allowlist error without issuing a request, then
+  // keeps the queue alive for the one-shot retry used by other title failures.
+  assert.equal(context.TitleUpdater.run(), true);
+
+  const written = sandbox.titlesSheet.writes[0].values;
+  for (let index = 0; index < disallowedUrls.length; index += 1) {
+    assert.equal(written[index][TITLE_SOURCE_COLUMN], '');
+    assert.equal(written[index][TITLE_NORMALIZED_COLUMN], '');
+    assert.equal(
+      written[index][TITLE_ERROR_COLUMN],
+      `Unsupported Board Game Arena URL: ${disallowedUrls[index]}`,
+    );
+  }
+});
+
 test('TitleUpdater bounds Titles and Rankings reads to getLastRow instead of open-ended A1 ranges', () => {
   const titleRows = [
-    ['https://example.com/existing', 'カタン', 'カタン', ''],
-    ['https://example.com/from-rankings', 'カルカソンヌ', 'カルカソンヌ', ''],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=existing',
+      'カタン',
+      'カタン',
+      '',
+    ],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=from-rankings',
+      'カルカソンヌ',
+      'カルカソンヌ',
+      '',
+    ],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
     rankingUrls: [
-      'https://example.com/existing',
-      'https://example.com/from-rankings',
-      'https://example.com/new',
+      'https://ja.boardgamearena.com/gamepanel?game=existing',
+      'https://ja.boardgamearena.com/gamepanel?game=from-rankings',
+      'https://ja.boardgamearena.com/gamepanel?game=new',
     ],
     responses: [{ status: 200, body: titlePage('アズール') }],
   });
@@ -261,7 +303,10 @@ test('TitleUpdater bounds Titles and Rankings reads to getLastRow instead of ope
 
   const written = sandbox.titlesSheet.writes[0].values;
   assert.equal(written.length, 3);
-  assert.equal(written[2][TITLE_URL_COLUMN], 'https://example.com/new');
+  assert.equal(
+    written[2][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=new',
+  );
   assert.equal(written[2][TITLE_NORMALIZED_COLUMN], 'アズール');
 });
 
@@ -302,8 +347,18 @@ test('TitleUpdater normalizes edition-only titles to an empty string', () => {
 
 test('TitleUpdater reports no remaining work when every title is already normalized', () => {
   const titleRows = [
-    ['https://example.com/done', 'カタン', 'カタン', ''],
-    ['https://example.com/also-done', 'カルカソンヌ', 'カルカソンヌ', ''],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=done',
+      'カタン',
+      'カタン',
+      '',
+    ],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=also-done',
+      'カルカソンヌ',
+      'カルカソンヌ',
+      '',
+    ],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -324,9 +379,14 @@ test('TitleUpdater reports no remaining work when every title is already normali
 
 test('TitleUpdater compacts mid-sheet blanks when every title is already normalized', () => {
   const titleRows = [
-    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=a', 'カタン', 'カタン', ''],
     ['', '', '', ''],
-    ['https://example.com/b', 'カルカソンヌ', 'カルカソンヌ', ''],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=b',
+      'カルカソンヌ',
+      'カルカソンヌ',
+      '',
+    ],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -346,15 +406,26 @@ test('TitleUpdater compacts mid-sheet blanks when every title is already normali
   ]);
   const written = sandbox.titlesSheet.writes[0].values;
   assert.equal(written.length, 2);
-  assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/a');
-  assert.equal(written[1][TITLE_URL_COLUMN], 'https://example.com/b');
+  assert.equal(
+    written[0][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=a',
+  );
+  assert.equal(
+    written[1][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=b',
+  );
   assert.equal(written[1][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
 });
 
 test('TitleUpdater keeps the queue alive when only failed pending titles remain', () => {
   const titleRows = [
-    ['https://example.com/ok', '', '', ''],
-    ['https://example.com/fail', '', '', 'previous error'],
+    ['https://ja.boardgamearena.com/gamepanel?game=ok', '', '', ''],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=fail',
+      '',
+      '',
+      'previous error',
+    ],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -374,7 +445,9 @@ test('TitleUpdater keeps the queue alive when only failed pending titles remain'
 });
 
 test('TitleUpdater records empty normalization as an error and ends the preferred queue', () => {
-  const titleRows = [['https://example.com/empty-norm', '', '', '']];
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=empty-norm', '', '', ''],
+  ];
   const sandbox = createTitleSandbox({
     titleRows,
     responses: [{ status: 200, body: titlePage('《新版》') }],
@@ -403,7 +476,7 @@ test('TitleUpdater records empty normalization as an error and ends the preferre
 
 test('TitleUpdater stops starting title fetches once the soft runtime budget elapses', () => {
   const titleRows = Array.from({ length: 3 }, (_, index) => [
-    `https://example.com/${index + 1}`,
+    `https://ja.boardgamearena.com/gamepanel?game=${index + 1}`,
     '',
     '',
     '',
@@ -435,9 +508,19 @@ test('TitleUpdater stops starting title fetches once the soft runtime budget ela
 
 test('TitleUpdater prefers unfailed title rows over permanently failing head rows', () => {
   const titleRows = [
-    ['https://example.com/fail-1', '', '', 'previous error'],
-    ['https://example.com/fail-2', '', '', 'previous error'],
-    ['https://example.com/ok', '', '', ''],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=fail-1',
+      '',
+      '',
+      'previous error',
+    ],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=fail-2',
+      '',
+      '',
+      'previous error',
+    ],
+    ['https://ja.boardgamearena.com/gamepanel?game=ok', '', '', ''],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -478,7 +561,14 @@ test('TitleUpdater prefers unfailed title rows over permanently failing head row
 });
 
 test('TitleUpdater retries failed titles once when only failures remain', () => {
-  const titleRows = [['https://example.com/retry', '', '', 'previous error']];
+  const titleRows = [
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=retry',
+      '',
+      '',
+      'previous error',
+    ],
+  ];
   const sandbox = createTitleSandbox({
     titleRows,
     responses: [{ status: 200, body: titlePage('カルカソンヌ') }],
@@ -488,16 +578,19 @@ test('TitleUpdater retries failed titles once when only failures remain', () => 
   assert.equal(context.TitleUpdater.run(), false);
 
   const written = sandbox.titlesSheet.writes[0].values;
-  assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/retry');
+  assert.equal(
+    written[0][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=retry',
+  );
   assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
 });
 
 test('TitleUpdater clears surplus Titles rows after compacting mid-sheet blanks', () => {
   const titleRows = [
-    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=a', 'カタン', 'カタン', ''],
     ['', '', '', ''],
-    ['https://example.com/b', '', '', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=b', '', '', ''],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -518,16 +611,22 @@ test('TitleUpdater clears surplus Titles rows after compacting mid-sheet blanks'
   ]);
   const written = sandbox.titlesSheet.writes[0].values;
   assert.equal(written.length, 2);
-  assert.equal(written[0][TITLE_URL_COLUMN], 'https://example.com/a');
-  assert.equal(written[1][TITLE_URL_COLUMN], 'https://example.com/b');
+  assert.equal(
+    written[0][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=a',
+  );
+  assert.equal(
+    written[1][TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=b',
+  );
   assert.equal(written[1][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
 });
 
 test('TitleUpdater leaves Titles intact when compacted setValues fails', () => {
   const titleRows = [
-    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=a', 'カタン', 'カタン', ''],
     ['', '', '', ''],
-    ['https://example.com/b', '', '', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=b', '', '', ''],
   ];
   const sandbox = createTitleSandbox({
     titleRows,
@@ -543,8 +642,8 @@ test('TitleUpdater leaves Titles intact when compacted setValues fails', () => {
   assert.deepEqual(sandbox.titlesSheet.operations, []);
   assert.deepEqual(sandbox.titlesSheet.clears, []);
   assert.deepEqual(titleRows, [
-    ['https://example.com/a', 'カタン', 'カタン', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=a', 'カタン', 'カタン', ''],
     ['', '', '', ''],
-    ['https://example.com/b', '', '', ''],
+    ['https://ja.boardgamearena.com/gamepanel?game=b', '', '', ''],
   ]);
 });
