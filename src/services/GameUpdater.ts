@@ -179,8 +179,8 @@ class GameUpdater {
    *
    * Failed refreshes keep prior BoardGameGeek metadata for troubleshooting, but
    * formula input cells must always be `null`: writing `''` or a stale derived
-   * value blocks ARRAYFORMULA until the next successful clear, which can be as
-   * long as the seven-day refresh window after a failed attempt.
+   * value blocks ARRAYFORMULA until the next successful clear, which can last
+   * for the full failure backoff after a failed attempt.
    */
   private static valuesForWrite(row: GameSheetRow): SpreadsheetCellRow {
     const values = row.values.slice();
@@ -205,7 +205,9 @@ class GameUpdater {
    * Determines whether a row can be fetched again under the refresh policy.
    *
    * Rows without a hyperlink are ownership markers or blanks and are never
-   * queued for BoardGameGeek requests.
+   * queued for BoardGameGeek requests. Rows that still show an error use the
+   * short failure backoff so a temporary upstream outage is not treated like a
+   * successful seven-day refresh.
    */
   private static needsRefresh(row: GameSheetRow, current: Date): boolean {
     const gameUrl = row.gameLink?.getLinkUrl() ?? null;
@@ -214,14 +216,25 @@ class GameUpdater {
     }
 
     const lastUpdatedAt = GameUpdater.getLastUpdatedAt(row);
-    return (
-      lastUpdatedAt === null ||
-      !isWithinRefreshWindow(
-        lastUpdatedAt,
-        current,
-        UPDATE_QUEUE_CONFIG.GAME_REFRESH_INTERVAL_DAYS,
-      )
-    );
+    if (lastUpdatedAt === null) {
+      return true;
+    }
+
+    const refreshIntervalDays = GameUpdater.hasRecordedError(row)
+      ? UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS
+      : UPDATE_QUEUE_CONFIG.GAME_REFRESH_INTERVAL_DAYS;
+    return !isWithinRefreshWindow(lastUpdatedAt, current, refreshIntervalDays);
+  }
+
+  /**
+   * Reports whether the row's last BoardGameGeek attempt left a visible error.
+   *
+   * A non-empty error cell selects the short failure backoff in `needsRefresh`
+   * until a later attempt clears it on success.
+   */
+  private static hasRecordedError(row: GameSheetRow): boolean {
+    const errorMessage = row.values[GAME_VALUE_COLUMN.ERROR_MESSAGE];
+    return typeof errorMessage === 'string' && errorMessage.length > 0;
   }
 
   /**
@@ -504,8 +517,8 @@ class GameUpdater {
    * Records a row-level error while allowing the rest of the batch to proceed.
    *
    * Advancing the attempt timestamp keeps permanent failures from monopolizing
-   * every oldest-first batch; the refresh window later makes the row eligible
-   * again so transient outages are still retried.
+   * every oldest-first batch. The error cell selects the short failure backoff
+   * so transient outages are retried much sooner than a successful refresh.
    */
   private static recordFailure(
     row: GameSheetRow,

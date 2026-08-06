@@ -3,7 +3,8 @@
  *
  * Focuses on empty sheets, oldest-first batching, derived-column clearing on
  * success and failure, advancing failure timestamps so permanent errors rotate
- * out, and writing only the real 2–10 player-recommendation columns before rank.
+ * out, short failure backoff versus the seven-day success window, and writing
+ * only the real 2–10 player-recommendation columns before rank.
  */
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -684,6 +685,127 @@ test('GameUpdater clears formula inputs when a game refresh fails', () => {
   assert.ok(
     gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
   );
+});
+
+test('GameUpdater retries failed rows after the short failure backoff, not the seven-day success window', () => {
+  const row = createGameRow(0, 'https://boardgamegeek.com/boardgame/42');
+  const rows = [row];
+  const gamesSheet = createGamesSheet(rows);
+  const failureAt = new Date(2024, 0, 1, 12, 0, 0);
+  const { ClockDate, clock } = createClockDate(failureAt.getTime());
+  let fetchCount = 0;
+  const context = loadGameUpdater({
+    Date: ClockDate,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => {
+    fetchCount += 1;
+    throw new Error('HTTP 503');
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 1);
+  assert.match(
+    gamesSheet.writes[0].values[0][GAME_ERROR_MESSAGE_COLUMN],
+    /^HTTP 503$/,
+  );
+
+  // Persist the failure stamp the same way a later trigger rereads the sheet.
+  gamesSheet.writes[0].values.forEach((values, index) => {
+    rows[index].values = values;
+  });
+  gamesSheet.writes.length = 0;
+
+  // Still inside the one-day failure backoff: must not re-fetch yet.
+  clock.nowMs = failureAt.getTime() + 12 * 60 * 60 * 1000;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 1);
+
+  // Past the failure backoff but well inside the seven-day success window:
+  // treating failures like successes would skip this retry until day seven.
+  clock.nowMs =
+    failureAt.getTime() +
+    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 2);
+});
+
+test('GameUpdater keeps successful rows ineligible for the full seven-day refresh window', () => {
+  const row = createGameRow(0, 'https://boardgamegeek.com/boardgame/42');
+  const rows = [row];
+  const gamesSheet = createGamesSheet(rows);
+  const successAt = new Date(2024, 0, 1, 12, 0, 0);
+  const { ClockDate, clock } = createClockDate(successAt.getTime());
+  let fetchCount = 0;
+  const context = loadGameUpdater({
+    Date: ClockDate,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = () => {
+    fetchCount += 1;
+    return {};
+  };
+  context.GameUpdater.applyGameItem = (gameRow, _gameItem, _gameId, current) => {
+    gameRow.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+    gameRow.values[GAME_ERROR_MESSAGE_COLUMN] = '';
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 1);
+
+  gamesSheet.writes[0].values.forEach((values, index) => {
+    rows[index].values = values;
+  });
+  gamesSheet.writes.length = 0;
+
+  // One day is enough for a failed row to retry, but a success must still wait.
+  clock.nowMs =
+    successAt.getTime() +
+    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 1);
+
+  clock.nowMs =
+    successAt.getTime() +
+    context.UPDATE_QUEUE_CONFIG.GAME_REFRESH_INTERVAL_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetchCount, 2);
 });
 
 test('GameUpdater advances past permanently failing head rows on the next batch', () => {
