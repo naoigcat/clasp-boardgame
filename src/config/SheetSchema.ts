@@ -74,7 +74,8 @@ const GAME_VALUE_COLUMN = {
   /**
    * Column Z: timestamp of the last BoardGameGeek update attempt. Advanced on
    * failure as well as success so permanent errors rotate out of the
-   * oldest-first queue.
+   * oldest-first queue; failed rows become eligible again after the short
+   * failure backoff rather than the full success refresh interval.
    */
   LAST_UPDATED_AT: 24,
   /**
@@ -89,7 +90,7 @@ const GAME_VALUE_COLUMN = {
  *
  * Cleared with null (not '') on every Games flush so ARRAYFORMULA can
  * re-expand; writing '' or stale derived values after a failed fetch would
- * block formulas for the full refresh window.
+ * block formulas for the full failure backoff.
  */
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [
   GAME_VALUE_COLUMN.DERIVED_TITLE,

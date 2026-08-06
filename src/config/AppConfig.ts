@@ -45,10 +45,19 @@ const UPDATE_QUEUE_CONFIG = {
    */
   MAX_RUNTIME_MILLISECONDS: 180000,
   /**
-   * Days a successful or failed game fetch stays ineligible. Failures advance
-   * the timestamp too so permanent errors do not monopolize oldest-first batches.
+   * Days a successful game fetch stays ineligible for another BoardGameGeek
+   * request. Failures use the shorter `GAME_FAILURE_BACKOFF_DAYS` window instead.
    */
   GAME_REFRESH_INTERVAL_DAYS: 7,
+  /**
+   * Days a failed game fetch stays ineligible.
+   *
+   * Failures still advance `LAST_UPDATED_AT` so permanent errors rotate out of
+   * oldest-first batches, but the backoff is much shorter than a successful
+   * refresh so transient BoardGameGeek outages and 429/5xx responses are
+   * retried on the next update cycle instead of waiting a full week.
+   */
+  GAME_FAILURE_BACKOFF_DAYS: 1,
 } as const;
 
 /**
