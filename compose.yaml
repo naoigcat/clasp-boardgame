@@ -1,24 +1,23 @@
 services:
   clasp:
     build:
+      context: .
       dockerfile_inline: |
         FROM node:26.5.0-bookworm-slim
+        ENV PNPM_HOME=/pnpm
+        ENV PATH="$$PNPM_HOME/bin:/deps/node_modules/.bin:$$PATH"
         RUN apt-get update && \
             apt-get install -y curl && \
-            npm -v && \
-            npm i -g \
-              @google/clasp@3.3.0 \
-              @types/google-apps-script@^1.0.81 \
-              prettier@3.9.1 \
-              typescript@5.8.3
+            curl -fsSL https://get.pnpm.io/install.sh | PNPM_VERSION=11.20.0 SHELL=bash sh -
+        WORKDIR /deps
+        COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+        RUN pnpm install --frozen-lockfile
+        ENV NODE_PATH=/deps/node_modules
         WORKDIR /app
         ENTRYPOINT [ "clasp" ]
     volumes:
       - login:/root
       - $PWD:/app
-      - node_modules:/app/node_modules
 volumes:
   login:
-    driver: local
-  node_modules:
     driver: local
