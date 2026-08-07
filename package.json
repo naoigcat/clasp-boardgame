@@ -5,7 +5,7 @@
   "dependencies": {
     "@google/clasp": "3.3.0",
     "@types/google-apps-script": "^1.0.81",
-    "prettier": "3.9.1",
+    "prettier": "3.9.6",
     "typescript": "5.8.3"
   }
 }
