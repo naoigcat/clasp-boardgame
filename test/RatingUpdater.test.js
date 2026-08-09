@@ -107,6 +107,27 @@ function emptyPlayedGamesPage() {
   return '<p class="empty">検索結果が存在しないか、マイボードゲームが未登録のユーザーです</p>';
 }
 
+test('RatingUpdater logs and skips when the Ratings sheet is missing', () => {
+  const logs = [];
+  const sandbox = createRatingSandbox({
+    ratingsSheet: null,
+    userId: 'user-1',
+    responses: [],
+  });
+  sandbox.Logger = {
+    log(message) {
+      logs.push(message);
+    },
+  };
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(logs, [
+    'Ratings sheet "Ratings" is missing; skipping rating import until the tab is restored.',
+  ]);
+});
+
 test('RatingUpdater writes aliased ratings without clearing a header-only sheet', () => {
   const ratingsSheet = createSheet('Ratings', 1);
   const sandbox = createRatingSandbox({

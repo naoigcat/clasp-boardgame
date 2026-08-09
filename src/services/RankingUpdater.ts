@@ -48,6 +48,11 @@ class RankingUpdater {
   static run(): void {
     const sheet = findSheet(SHEET_NAMES.RANKINGS);
     if (sheet === null) {
+      // Sync import: log and skip so a renamed Rankings tab is visible in the
+      // execution log instead of looking like a successful no-op.
+      Logger.log(
+        `Rankings sheet "${SHEET_NAMES.RANKINGS}" is missing; skipping ranking import until the tab is restored.`,
+      );
       return;
     }
 
