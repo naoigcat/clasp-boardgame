@@ -5,6 +5,8 @@
  * external titles and tags cannot become executable sheet formulas.
  */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const { loadScripts } = require('./helpers/appScriptHarness');
@@ -54,6 +56,24 @@ test('escapeSheetCellValue leaves safe values unchanged', () => {
   assert.equal(context.escapeSheetCellValue(4), 4);
   assert.equal(context.escapeSheetCellValue(true), true);
   assert.equal(context.escapeSheetCellValue(null), null);
+  // Fullwidth prefixes and LF are not formula starters in Sheets.
+  assert.equal(context.escapeSheetCellValue('＝SUM(A1)'), '＝SUM(A1)');
+  assert.equal(context.escapeSheetCellValue('＋cmd'), '＋cmd');
+  assert.equal(context.escapeSheetCellValue('－1'), '－1');
+  assert.equal(context.escapeSheetCellValue('＠SUM(A1)'), '＠SUM(A1)');
+  assert.equal(context.escapeSheetCellValue('\nLF'), '\nLF');
+});
+
+test('escapeSheetCellValue documents fullwidth prefixes and newlines as out of scope', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'shared', 'SpreadsheetUtils.ts'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /Fullwidth prefixes[\s\S]*newlines are out of scope for\s+\*\s+formula injection/,
+  );
 });
 
 test('escapeSheetValues escapes only string cells in each row', () => {
