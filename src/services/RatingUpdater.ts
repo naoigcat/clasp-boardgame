@@ -83,7 +83,7 @@ class RatingUpdater {
         rows.length,
         SHEET_LAYOUT.RATING_COLUMN_COUNT,
       )
-      .setValues(rows);
+      .setValues(escapeSheetValues(rows));
     clearSurplusSheetDataRows(
       sheet,
       rows.length,

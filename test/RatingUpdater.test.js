@@ -73,6 +73,7 @@ function loadRatingUpdater(sandbox) {
     { path: 'src/config/AppConfig.ts', exports: ['BODOGE_CONFIG'] },
     { path: 'src/config/SheetSchema.ts', exports: [] },
     { path: 'src/config/TitleRules.ts', exports: [] },
+    { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     {
       path: 'src/infrastructure/ScriptPropertyStore.ts',
@@ -129,6 +130,34 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
       numRows: 1,
       numColumns: 2,
       values: [['ハッシュタグ', '4']],
+    },
+  ]);
+});
+
+test('RatingUpdater escapes formula-like titles before setValues', () => {
+  const formulaTitle = '+cmd|a';
+  const ratingsSheet = createSheet('Ratings', 1);
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard(formulaTitle, '5') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 1,
+      numColumns: 2,
+      // Bodoge titles are external text; prefix so Sheets stores them as literals.
+      values: [[`'${formulaTitle}`, '5']],
     },
   ]);
 });

@@ -170,3 +170,29 @@ test('RankingUpdater keeps existing rows when fetched HTML has no games', () => 
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(rankingsSheet, 'setValues'), []);
 });
+
+test('RankingUpdater escapes formula-like tag names before setValues', () => {
+  const formulaTagName = '=HYPERLINK("https://evil.example","x")';
+  const rankingsSheet = createSheet('Rankings', 1);
+  const sandbox = createSandbox({
+    sheets: { Rankings: rankingsSheet },
+    responses: [
+      {
+        status: 200,
+        body: rankingPage(
+          [rankingGame()],
+          [{ id: SMALL_CARD_GAME_TAG_ID, name: formulaTagName }],
+        ),
+      },
+    ],
+  });
+  const context = loadRankings(sandbox);
+
+  context.RankingUpdater.run();
+
+  const written = getCalls(rankingsSheet, 'setValues')[0].values[0];
+  // Tag names are external text; a leading apostrophe keeps Sheets from
+  // executing them as formulas when the workbook is shared.
+  assert.equal(written[2], `'${formulaTagName}`);
+  assert.equal(written[0], 'https://ja.boardgamearena.com/gamepanel?game=azul');
+});
