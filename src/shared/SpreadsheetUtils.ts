@@ -6,6 +6,9 @@
  * prefixed so Sheets does not drop leading zeros. A leading apostrophe keeps
  * those values as literals when the workbook is shared. `getValues` later
  * returns the text without that apostrophe, so in-memory matching stays unchanged.
+ *
+ * Fullwidth prefixes (`＝`, `＋`, `－`, `＠`) and newlines are out of scope for
+ * formula injection: Sheets does not treat those characters as formula starters.
  */
 function escapeSheetCellValue(
   value: SpreadsheetCellValue,
