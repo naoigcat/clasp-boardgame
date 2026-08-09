@@ -173,6 +173,7 @@ test('RankingUpdater leaves Rankings intact when setValues fails', () => {
 });
 
 test('RankingUpdater keeps existing rows when fetched HTML has no games', () => {
+  const logs = [];
   const rankingsSheet = createSheet('Rankings', 4);
   const sandbox = createSandbox({
     sheets: { Rankings: rankingsSheet },
@@ -183,12 +184,20 @@ test('RankingUpdater keeps existing rows when fetched HTML has no games', () => 
       },
     ],
   });
+  sandbox.Logger = {
+    log(message) {
+      logs.push(message);
+    },
+  };
   const context = loadRankings(sandbox);
 
   context.RankingUpdater.run();
 
   assert.deepEqual(getCalls(rankingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(rankingsSheet, 'setValues'), []);
+  assert.deepEqual(logs, [
+    'Board Game Arena catalog was empty; keeping the previous Rankings snapshot.',
+  ]);
 });
 
 test('RankingUpdater escapes formula-like tag names before setValues', () => {
