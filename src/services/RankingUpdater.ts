@@ -178,7 +178,7 @@ class RankingUpdater {
     tagNames: Readonly<Record<number, string>>,
   ): RankingSheetRow {
     return [
-      `${BOARD_GAME_ARENA_CONFIG.GAME_PANEL_URL}${game.name}`,
+      `${BOARD_GAME_ARENA_CONFIG.GAME_PANEL_URL}${encodeURIComponent(game.name)}`,
       null,
       RankingUpdater.resolveTagNames(game.tagIds, tagNames).join(' '),
       game.gamesPlayed,

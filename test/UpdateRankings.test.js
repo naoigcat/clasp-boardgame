@@ -225,3 +225,31 @@ test('RankingUpdater escapes formula-like tag names before setValues', () => {
   assert.equal(written[2], `'${formulaTagName}`);
   assert.equal(written[0], 'https://ja.boardgamearena.com/gamepanel?game=azul');
 });
+
+test('RankingUpdater percent-encodes game names in panel URLs', () => {
+  const reservedName = 'foo&bar#baz';
+  const rankingsSheet = createSheet('Rankings', 1);
+  const sandbox = createSandbox({
+    sheets: { Rankings: rankingsSheet },
+    responses: [
+      {
+        status: 200,
+        body: rankingPage(
+          [{ ...rankingGame(), name: reservedName }],
+          [rankingTag()],
+        ),
+      },
+    ],
+  });
+  const context = loadRankings(sandbox);
+
+  context.RankingUpdater.run();
+
+  const written = getCalls(rankingsSheet, 'setValues')[0].values[0];
+  // `&` / `#` in a raw slug would split or fragment the query; encoding keeps
+  // Rankings URLs and TitleUpdater's GAME_PANEL_URL prefix check aligned.
+  assert.equal(
+    written[0],
+    `https://ja.boardgamearena.com/gamepanel?game=${encodeURIComponent(reservedName)}`,
+  );
+});
