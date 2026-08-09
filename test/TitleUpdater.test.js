@@ -5,6 +5,8 @@
  * cover Rankings URL intake, failed-row deferral, and the final retry pass.
  */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const { loadScripts } = require('./helpers/appScriptHarness');
@@ -361,6 +363,18 @@ test('TitleUpdater rejects non-game-panel URLs before fetching', () => {
       `Unsupported Board Game Arena URL: ${disallowedUrls[index]}`,
     );
   }
+});
+
+test('TitleUpdater documents that allowed-host redirects are fine', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'TitleUpdater.ts'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /Redirects issued by that already-allowed\s+\*\s+host are fine/,
+  );
 });
 
 test('TitleUpdater bounds Titles and Rankings reads to getLastRow instead of open-ended A1 ranges', () => {
