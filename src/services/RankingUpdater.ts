@@ -67,6 +67,9 @@ class RankingUpdater {
     if (rows.length === 0) {
       // An unexpectedly empty catalog is safer to treat as a source problem
       // than to replace the last known ranking snapshot with no rows.
+      Logger.log(
+        'Board Game Arena catalog was empty; keeping the previous Rankings snapshot.',
+      );
       return;
     }
 
