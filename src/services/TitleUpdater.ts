@@ -167,7 +167,7 @@ class TitleUpdater {
         rows.length,
         SHEET_LAYOUT.TITLE_COLUMN_COUNT,
       )
-      .setValues(rows);
+      .setValues(escapeSheetValues(rows));
     clearSurplusSheetDataRows(
       sheet,
       rows.length,

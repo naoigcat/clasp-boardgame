@@ -74,7 +74,7 @@ class RankingUpdater {
         rows.length,
         SHEET_LAYOUT.RANKING_COLUMN_COUNT,
       )
-      .setValues(rows);
+      .setValues(escapeSheetValues(rows));
     clearSurplusSheetDataRows(
       sheet,
       rows.length,

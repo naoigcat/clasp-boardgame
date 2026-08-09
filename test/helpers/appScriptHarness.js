@@ -169,6 +169,7 @@ function loadRankings(sandbox) {
     { path: 'src/config/SheetSchema.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
     { path: 'src/shared/HtmlUtils.ts', exports: [] },
+    { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     {

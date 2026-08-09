@@ -36,6 +36,7 @@ function loadTitleUpdaterService(sandbox) {
     { path: 'src/config/TitleRules.ts', exports: [] },
     { path: 'src/shared/DateUtils.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
+    { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/services/TitleUpdater.ts', exports: ['TitleUpdater'] },
@@ -232,6 +233,31 @@ test('TitleUpdater extracts titles from compacted Board Game Arena markup', () =
   assert.equal(written[0][TITLE_SOURCE_COLUMN], 'カタン');
   assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+});
+
+test('TitleUpdater escapes formula-like scraped titles before setValues', () => {
+  const formulaTitle = '=1+2';
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=formula', '', '', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage(formulaTitle) }],
+  });
+  const context = loadTitleUpdaterService(sandbox);
+
+  assert.equal(context.TitleUpdater.run(), false);
+
+  const written = sandbox.titlesSheet.writes[0].values[0];
+  // Escape only the write payload; source text starting with "=" must not become
+  // an executable sheet formula while ordinary https URLs stay unprefixed.
+  assert.equal(written[TITLE_SOURCE_COLUMN], `'${formulaTitle}`);
+  assert.equal(written[TITLE_NORMALIZED_COLUMN], `'${formulaTitle}`);
+  assert.equal(
+    written[TITLE_URL_COLUMN],
+    'https://ja.boardgamearena.com/gamepanel?game=formula',
+  );
+  assert.equal(written[TITLE_ERROR_COLUMN], '');
 });
 
 test('TitleUpdater rejects non-game-panel URLs before fetching', () => {
