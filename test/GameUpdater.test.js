@@ -3,8 +3,9 @@
  *
  * Focuses on empty sheets, oldest-first batching, derived-column clearing on
  * success and failure, advancing failure timestamps so permanent errors rotate
- * out, short failure backoff versus the seven-day success window, and writing
- * only the real 2–10 player-recommendation columns before rank.
+ * out, short failure backoff versus the seven-day success window, formula
+ * escaping of external strings on write, and writing only the real 2–10
+ * player-recommendation columns before rank.
  */
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -340,6 +341,7 @@ function loadGameUpdater(sandbox) {
     { path: 'src/config/TitleRules.ts', exports: [] },
     { path: 'src/shared/DateUtils.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
+    { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/shared/XmlUtils.ts', exports: [] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/services/GameUpdater.ts', exports: ['GameUpdater'] },
@@ -356,6 +358,7 @@ function loadGameUpdaterWithHttp(sandbox) {
     { path: 'src/config/TitleRules.ts', exports: [] },
     { path: 'src/shared/DateUtils.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
+    { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/shared/XmlUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     {
@@ -646,10 +649,7 @@ test('GameUpdater clears formula inputs for refreshed and skipped Games rows', (
   const writtenRows = gamesSheet.writes[0].values;
   // null clears the cell for ARRAYFORMULA; '' would leave a blocking blank.
   assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(null));
-  assert.deepEqual(
-    getArrayFormulaInputs(writtenRows[50]),
-    Array(5).fill(null),
-  );
+  assert.deepEqual(getArrayFormulaInputs(writtenRows[50]), Array(5).fill(null));
 });
 
 test('GameUpdater clears formula inputs when a game refresh fails', () => {
@@ -737,11 +737,7 @@ test('GameUpdater retries failed rows after the short failure backoff, not the s
   // treating failures like successes would skip this retry until day seven.
   clock.nowMs =
     failureAt.getTime() +
-    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
+    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS * 24 * 60 * 60 * 1000;
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 2);
 });
@@ -773,7 +769,12 @@ test('GameUpdater keeps successful rows ineligible for the full seven-day refres
     fetchCount += 1;
     return {};
   };
-  context.GameUpdater.applyGameItem = (gameRow, _gameItem, _gameId, current) => {
+  context.GameUpdater.applyGameItem = (
+    gameRow,
+    _gameItem,
+    _gameId,
+    current,
+  ) => {
     gameRow.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
     gameRow.values[GAME_ERROR_MESSAGE_COLUMN] = '';
   };
@@ -789,11 +790,7 @@ test('GameUpdater keeps successful rows ineligible for the full seven-day refres
   // One day is enough for a failed row to retry, but a success must still wait.
   clock.nowMs =
     successAt.getTime() +
-    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
+    context.UPDATE_QUEUE_CONFIG.GAME_FAILURE_BACKOFF_DAYS * 24 * 60 * 60 * 1000;
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 1);
 
@@ -871,6 +868,55 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
     getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
     Array(5).fill(null),
   );
+});
+
+test('GameUpdater escapes formula-like recommendations and errors before setValues', () => {
+  const formulaRecommendation = '=HYPERLINK("https://evil.example","x")';
+  const formulaError = '+cmd|a';
+  const successRow = createGameRow(0, 'https://boardgamegeek.com/boardgame/1');
+  const failureRow = createGameRow(1, 'https://boardgamegeek.com/boardgame/2');
+  const gamesSheet = createGamesSheet([successRow, failureRow]);
+  const context = loadGameUpdater({
+    Date,
+    Logger: {
+      log() {},
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name) {
+            return name === 'Games' ? gamesSheet : null;
+          },
+        };
+      },
+    },
+  });
+
+  context.GameUpdater.fetchGameItem = (gameReference) => {
+    if (gameReference.id === '2') {
+      throw new Error(formulaError);
+    }
+
+    return {};
+  };
+  context.GameUpdater.applyGameItem = (row, _gameItem, _gameId, current) => {
+    row.values[GAME_PLAYER_RECOMMENDATION_START_COLUMN] = formulaRecommendation;
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+    row.values[GAME_ERROR_MESSAGE_COLUMN] = '';
+  };
+
+  assert.equal(context.GameUpdater.run(), false);
+
+  const [writtenSuccess, writtenFailure] = gamesSheet.writes[0].values;
+  // Recommendation labels and error text are external; a leading apostrophe
+  // keeps Sheets from executing them as formulas when the workbook is shared.
+  assert.equal(
+    writtenSuccess[GAME_PLAYER_RECOMMENDATION_START_COLUMN],
+    `'${formulaRecommendation}`,
+  );
+  assert.equal(writtenFailure[GAME_ERROR_MESSAGE_COLUMN], `'${formulaError}`);
+  // Cleared error cells stay empty rather than becoming a quoted blank.
+  assert.equal(writtenSuccess[GAME_ERROR_MESSAGE_COLUMN], '');
 });
 
 test('GameUpdater writes 2–10 player recommendations and leaves board-game rank intact', () => {
