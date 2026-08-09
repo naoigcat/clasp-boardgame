@@ -158,6 +158,8 @@ class GameUpdater {
       return;
     }
 
+    // Escape at write time so BoardGameGeek recommendation labels and error
+    // text cannot become executable formulas when the workbook is shared.
     sheet
       .getRange(
         SHEET_LAYOUT.FIRST_DATA_ROW,
@@ -165,7 +167,9 @@ class GameUpdater {
         rows.length,
         rows[0].values.length,
       )
-      .setValues(rows.map((row) => GameUpdater.valuesForWrite(row)));
+      .setValues(
+        escapeSheetValues(rows.map((row) => GameUpdater.valuesForWrite(row))),
+      );
     clearSurplusSheetDataRows(
       sheet,
       rows.length,
