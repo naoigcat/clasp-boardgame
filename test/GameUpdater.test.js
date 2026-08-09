@@ -370,6 +370,33 @@ function loadGameUpdaterWithHttp(sandbox) {
   ]);
 }
 
+test('GameUpdater keeps the Games phase when the Games sheet is missing', () => {
+  const logs = [];
+  const context = loadGameUpdater({
+    Logger: {
+      log(message) {
+        logs.push(message);
+      },
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName() {
+            return null;
+          },
+        };
+      },
+    },
+  });
+
+  // false would let UpdateCoordinator advance to Titles and treat a renamed or
+  // deleted Games tab as a completed BoardGameGeek batch with no execution log.
+  assert.equal(context.GameUpdater.run(), true);
+  assert.deepEqual(logs, [
+    'Games sheet "Games" is missing; keeping the Games phase until the tab is restored.',
+  ]);
+});
+
 test('GameUpdater treats a null rich-text value as the end of the Games data', () => {
   const gamesSheet = createEmptyGamesSheet();
   const context = loadGameUpdater({
