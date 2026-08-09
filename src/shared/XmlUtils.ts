@@ -1,6 +1,7 @@
 /**
- * XML element type supplied by Apps Script's XmlService.
+ * XML types supplied by Apps Script's XmlService.
  */
+type XmlDocument = GoogleAppsScript.XML_Service.Document;
 type XmlElement = GoogleAppsScript.XML_Service.Element;
 
 /**
@@ -10,6 +11,20 @@ type XmlElement = GoogleAppsScript.XML_Service.Element;
  * preserving that token avoids inventing zeros that would look like real data.
  */
 type NumericDisplayValue = number | 'N/A';
+
+/**
+ * Returns the document root element or raises a descriptive parsing error.
+ *
+ * XmlService may yield a null root for empty or malformed documents. Failing
+ * here keeps callers aligned with the required-child helpers below.
+ */
+function getRequiredXmlRootElement(document: XmlDocument): XmlElement {
+  const rootElement = document.getRootElement();
+  if (rootElement === null) {
+    throw new Error('Required XML root element was not found');
+  }
+  return rootElement;
+}
 
 /**
  * Returns a required child element or raises a descriptive parsing error.
