@@ -1,8 +1,9 @@
 /**
  * UpdateCoordinator queue lifecycle tests.
  *
- * Covers lock skipping, menu-driven restarts, Games-to-Titles phase transitions,
- * and cleanup of the shared trigger when the queued work finishes.
+ * Covers lock skipping, menu-driven restarts that schedule Games before sync
+ * imports, Games-to-Titles phase transitions, and cleanup of the shared trigger
+ * when the queued work finishes.
  */
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -116,7 +117,7 @@ function loadUpdate(sandbox) {
   ]);
 }
 
-test('update runs single-execution work before scheduling the games phase', () => {
+test('update schedules the games phase before single-execution sync imports', () => {
   const sandbox = createUpdateSandbox([], []);
   const context = loadUpdate(sandbox);
 
@@ -128,12 +129,39 @@ test('update runs single-execution work before scheduling the games phase', () =
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
-    ['deleteProperty', 'UPDATE_STEP'],
-    ['rankings'],
-    ['ratings'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
+    ['rankings'],
+    ['ratings'],
   ]);
+});
+
+test('update ensures games resume state before sync imports that can hard-timeout', () => {
+  const sandbox = createUpdateSandbox([], []);
+  const context = loadUpdate(sandbox);
+
+  context.update();
+
+  const stepIndex = sandbox.calls.findIndex(
+    (call) =>
+      call[0] === 'setProperty' &&
+      call[1] === 'UPDATE_STEP' &&
+      call[2] === 'games',
+  );
+  const ensureIndex = sandbox.calls.findIndex(
+    (call) => call[0] === 'ensureTrigger',
+  );
+  const rankingsIndex = sandbox.calls.findIndex(
+    (call) => call[0] === 'rankings',
+  );
+
+  assert.ok(stepIndex !== -1, 'expected UPDATE_STEP=games to be persisted');
+  assert.ok(ensureIndex !== -1, 'expected games trigger to be ensured');
+  assert.ok(rankingsIndex !== -1, 'expected rankings import to run');
+  assert.ok(
+    stepIndex < rankingsIndex && ensureIndex < rankingsIndex,
+    'Games STEP and trigger must be ready before sync imports that can hard-timeout',
+  );
 });
 
 test('scheduled updates complete games before starting titles with the same handler', () => {
@@ -187,11 +215,10 @@ test('update still schedules games when ranking import fails', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
-    ['deleteProperty', 'UPDATE_STEP'],
-    ['rankings'],
-    ['ratings'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
+    ['rankings'],
+    ['ratings'],
   ]);
   assert.deepEqual(sandbox.logs, [
     'Ranking update failed: BGA catalog unavailable',
@@ -212,11 +239,10 @@ test('update still schedules games when rating import fails', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
-    ['deleteProperty', 'UPDATE_STEP'],
-    ['rankings'],
-    ['ratings'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
+    ['rankings'],
+    ['ratings'],
   ]);
   assert.deepEqual(sandbox.logs, [
     'Rating update failed: Bodoge HTML unrecognized',
@@ -238,11 +264,10 @@ test('update still schedules games when both sync imports fail', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
-    ['deleteProperty', 'UPDATE_STEP'],
-    ['rankings'],
-    ['ratings'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
+    ['rankings'],
+    ['ratings'],
   ]);
   assert.deepEqual(sandbox.logs, [
     'Ranking update failed: BGA catalog unavailable',

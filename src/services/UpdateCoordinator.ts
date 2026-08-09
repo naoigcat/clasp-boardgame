@@ -37,17 +37,30 @@ class UpdateCoordinator {
   /**
    * Performs work that fits in one execution and schedules the first batch.
    *
-   * Fast sheet replacements run first; the Games phase is persisted before the
-   * trigger is created so a trigger that fires early still knows what to do.
+   * The Games phase and shared trigger are established before Rankings/Ratings
+   * so an Apps Script hard timeout during those imports still leaves a queue
+   * that can resume Games/Titles on the next trigger fire.
    */
   private static startNewUpdate(): void {
     UpdateCoordinator.removeSupersededTriggers();
-    ScriptPropertyStore.remove(UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY);
+
+    // Bodoge can spend minutes paging; hard timeout during that work must not
+    // strand the queue with no UPDATE_STEP and no trigger until the next menu
+    // click. Persist Games and ensure the shared trigger first; a trigger that
+    // fires while sync imports still hold the lock is skipped by tryLock(0).
+    ScriptPropertyStore.set(
+      UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY,
+      UPDATE_QUEUE_CONFIG.GAMES_STEP,
+    );
+    TriggerManager.ensureSingle(
+      UPDATE_QUEUE_CONFIG.HANDLER_NAME,
+      UPDATE_QUEUE_CONFIG.TRIGGER_INTERVAL_MINUTES,
+    );
 
     // These imports replace complete sheet snapshots and normally fit in one
     // execution; the slower per-game work is deliberately deferred to batches.
     // Catch each sync import on its own so a Bodoge or BGA catalog outage cannot
-    // skip scheduling BoardGameGeek batches that still need to run.
+    // skip BoardGameGeek batches that the trigger above will still advance.
     try {
       RankingUpdater.run();
     } catch (error: unknown) {
@@ -59,15 +72,6 @@ class UpdateCoordinator {
     } catch (error: unknown) {
       Logger.log(`Rating update failed: ${getErrorMessage(error)}`);
     }
-
-    ScriptPropertyStore.set(
-      UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY,
-      UPDATE_QUEUE_CONFIG.GAMES_STEP,
-    );
-    TriggerManager.ensureSingle(
-      UPDATE_QUEUE_CONFIG.HANDLER_NAME,
-      UPDATE_QUEUE_CONFIG.TRIGGER_INTERVAL_MINUTES,
-    );
   }
 
   /**
