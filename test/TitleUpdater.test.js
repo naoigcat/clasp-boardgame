@@ -235,6 +235,79 @@ test('TitleUpdater extracts titles from compacted Board Game Arena markup', () =
   assert.equal(written[0][TITLE_ERROR_COLUMN], '');
 });
 
+test('TitleUpdater keeps the Titles phase when the Titles sheet is missing', () => {
+  const logs = [];
+  const sandbox = createTitleSandbox({
+    titleRows: [],
+    responses: [],
+  });
+  sandbox.SpreadsheetApp = {
+    getActiveSpreadsheet() {
+      return {
+        getSheetByName() {
+          return null;
+        },
+      };
+    },
+  };
+  sandbox.Logger = {
+    log(message) {
+      logs.push(message);
+    },
+  };
+  const context = loadTitleUpdaterService(sandbox);
+
+  // false would let UpdateCoordinator.finishUpdate treat a renamed or deleted
+  // Titles tab as a completed Titles phase and clear UPDATE_STEP/trigger.
+  assert.equal(context.TitleUpdater.run(), true);
+  assert.deepEqual(logs, [
+    'Titles sheet "Titles" is missing; keeping the Titles phase until the tab is restored.',
+  ]);
+});
+
+test('TitleUpdater normalizes existing rows when the Rankings sheet is missing', () => {
+  const logs = [];
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=solo', '', '', ''],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    responses: [{ status: 200, body: titlePage('カタン') }],
+    rankingUrls: ['https://ja.boardgamearena.com/gamepanel?game=ignored'],
+  });
+  sandbox.SpreadsheetApp = {
+    getActiveSpreadsheet() {
+      return {
+        getSheetByName(name) {
+          if (name === 'Titles') {
+            return sandbox.titlesSheet;
+          }
+          return null;
+        },
+      };
+    },
+  };
+  sandbox.Logger = {
+    log(message) {
+      logs.push(message);
+    },
+  };
+  const context = loadTitleUpdaterService(sandbox);
+
+  // Rankings absence must not finish the queue; existing Titles rows still
+  // normalize, and Ranking-only URLs are not ingested until the tab returns.
+  assert.equal(context.TitleUpdater.run(), false);
+  assert.deepEqual(logs, [
+    'Rankings sheet "Rankings" is missing; continuing Titles normalization without new Ranking URLs.',
+  ]);
+  assert.deepEqual(sandbox.rankingsSheet.rangeReads, []);
+  const written = sandbox.titlesSheet.writes[0].values;
+  assert.equal(written.length, 1);
+  assert.equal(written[0][TITLE_SOURCE_COLUMN], 'カタン');
+  assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'カタン');
+  assert.equal(written[0][TITLE_ERROR_COLUMN], '');
+});
+
 test('TitleUpdater escapes formula-like scraped titles before setValues', () => {
   const formulaTitle = '=1+2';
   const titleRows = [

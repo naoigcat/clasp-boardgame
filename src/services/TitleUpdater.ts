@@ -18,12 +18,27 @@ class TitleUpdater {
    * head of the queue cannot stall every later title. After only failures remain,
    * a single retry pass runs and the queue ends so permanent errors wait for the
    * next manual update instead of holding the shared trigger open forever.
+   * A missing Titles tab returns true after logging so a rename or deletion is
+   * not treated as Titles completion. A missing Rankings tab logs and still
+   * normalizes existing Titles rows; only new Ranking URLs are skipped.
    */
   static run(): boolean {
     const rankingsSheet = findSheet(SHEET_NAMES.RANKINGS);
     const titlesSheet = findSheet(SHEET_NAMES.TITLES);
-    if (rankingsSheet === null || titlesSheet === null) {
-      return false;
+    if (titlesSheet === null) {
+      // Returning true keeps UPDATE_STEP on titles; false would finishUpdate and
+      // hide a renamed or deleted contract tab as a successful Titles finish.
+      Logger.log(
+        `Titles sheet "${SHEET_NAMES.TITLES}" is missing; keeping the Titles phase until the tab is restored.`,
+      );
+      return true;
+    }
+    if (rankingsSheet === null) {
+      // Rankings only supplies new URLs. Existing Titles rows can still normalize
+      // without it, so do not finish the queue just because intake is unavailable.
+      Logger.log(
+        `Rankings sheet "${SHEET_NAMES.RANKINGS}" is missing; continuing Titles normalization without new Ranking URLs.`,
+      );
     }
 
     const rows = TitleUpdater.loadRows(titlesSheet, rankingsSheet);
@@ -90,12 +105,14 @@ class TitleUpdater {
    *
    * New URLs are appended with blank titles so later batches scrape them. Known
    * URLs keep their prior source title, canonical title, and error cells.
+   * When rankingsSheet is null, only existing Titles rows are returned so a
+   * missing Rankings tab cannot block normalization already in the queue.
    * Both sheet reads stop at getLastRow so open-ended A1 spans cannot pull the
    * sheet's maximum row count into memory on large spreadsheets.
    */
   private static loadRows(
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
-    rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet | null,
   ): TitleSheetRow[] {
     const titlesDataRowCount =
       titlesSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
@@ -114,6 +131,10 @@ class TitleUpdater {
     const knownUrls = new Set<string>(
       rows.map((row) => String(row[TITLE_COLUMN.URL])),
     );
+
+    if (rankingsSheet === null) {
+      return rows;
+    }
 
     const rankingsDataRowCount =
       rankingsSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
