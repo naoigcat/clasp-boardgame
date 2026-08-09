@@ -286,7 +286,9 @@ class TitleUpdater {
    *
    * Rankings normally writes GAME_PANEL_URL rows, but existing Titles cells and
    * Rankings column A can be edited to any string. Prefix matching against that
-   * constant covers host and path so UrlFetch cannot be redirected elsewhere.
+   * constant covers host and path before UrlFetch so callers cannot point the
+   * scrape at an arbitrary origin. Redirects issued by that already-allowed
+   * host are fine; this check is about the request URL, not redirect policy.
    */
   private static assertAllowedGamePanelUrl(gameUrl: string): void {
     if (!gameUrl.startsWith(BOARD_GAME_ARENA_CONFIG.GAME_PANEL_URL)) {
