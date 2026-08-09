@@ -151,7 +151,10 @@ format change.
 - A failed BoardGameGeek game lookup records its message and advances the row's
   attempt timestamp so later batches can refresh other stale games. A one-day
   failure backoff later makes the failed row eligible again, shorter than the
-  seven-day window used after a successful refresh.
+  seven-day window used after a successful refresh. Retries after that backoff
+  run on the next manual Update; the Games phase usually finishes and removes
+  the shared trigger before the backoff elapses, so the five-minute queue does
+  not wait around to retry those rows.
 - A failed title lookup records its message and leaves the canonical title
   blank. Later batches prefer titles that have not yet failed so the queue can
   advance; a retry pass runs once only failed rows remain.

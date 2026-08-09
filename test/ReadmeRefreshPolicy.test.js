@@ -84,3 +84,18 @@ test('README documents the short failure backoff separately from the success ref
     ),
   );
 });
+
+test('README documents that failure-backoff retries wait for the next manual Update', () => {
+  const readme = normalizeReadme(
+    fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8'),
+  );
+
+  assert.match(
+    readme,
+    /Retries after that backoff run on the next manual Update/i,
+  );
+  assert.match(
+    readme,
+    /Games phase usually finishes and removes the shared trigger before the backoff elapses/i,
+  );
+});
