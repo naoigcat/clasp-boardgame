@@ -109,7 +109,7 @@ class RatingUpdater {
   private static fetchAllRows(userId: string): RatingSheetRow[] {
     const rows: RatingSheetRow[] = [];
     // Distinguishes Bodoge's explicit empty list from card markup that matched
-    // but produced no importable titles (missing Japanese titles, exclusions).
+    // but produced no importable titles (missing titles, exclusions, or all "0").
     let sawCards = false;
 
     // +1 lets a full MAX_PAGE_COUNT card collection still fetch the empty
@@ -156,8 +156,9 @@ class RatingUpdater {
           'Bodoge ratings page contained cards without extractable Japanese titles',
         );
       }
-      // Same snapshot rule when rating markup is missing or empty: titles alone
-      // must not replace a previous complete Ratings sheet.
+      // Same snapshot rule when rating markup is missing or empty (not "0"):
+      // titles alone must not replace a previous complete Ratings sheet.
+      // Unrated "0" cards are skipped in parsePage like excluded titles.
       if (page.hasCardsWithoutRatings) {
         throw new Error(
           'Bodoge ratings page contained cards without extractable ratings',
@@ -212,6 +213,11 @@ class RatingUpdater {
         // Title present but rating markup missing/empty; abort before write so
         // a changed rating attribute cannot wipe the prior Ratings snapshot.
         hasCardsWithoutRatings = true;
+        return;
+      }
+      // Bodoge uses "0" for unrated / privacy-hidden played cards. Skip them
+      // like excluded titles so mixed pages can still import real scores.
+      if (rating === '0') {
         return;
       }
 
@@ -280,8 +286,10 @@ class RatingUpdater {
   /**
    * Extracts the star-rating value from one Bodoge rating card.
    *
-   * Returns null when the rating attribute is absent or empty so callers can
-   * abort instead of writing title-only rows that clear prior Ratings data.
+   * Returns null when the rating attribute is absent or empty (markup
+   * corruption). Returns "0" for unrated / privacy-hidden cards so callers can
+   * skip them without aborting a mixed page; writing "0" as a score would
+   * overwrite prior Ratings snapshots with title/"0" rows.
    */
   private static extractRating(cardHtml: string): string | null {
     const ratingMatch = cardHtml.match(

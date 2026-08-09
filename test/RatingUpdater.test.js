@@ -446,6 +446,95 @@ test('RatingUpdater keeps existing rows when every card rating attribute is empt
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
+test('RatingUpdater keeps existing rows when every card rating is zero', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Unrated "0" cards are skipped like exclusions; all-skipped imports keep
+  // the prior snapshot via the no-importable-titles path (not markup abort).
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '0') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /Bodoge ratings pages contained cards but yielded no importable titles/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater imports rated cards from a page mixed with zero ratings', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Regression: typical Bodoge played pages mix scored cards with
+  // data-rating-result="0"; "0" must skip without aborting the whole page.
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      {
+        status: 200,
+        body: [
+          ratingCard('カタン', '5'),
+          ratingCard('チッキットゥライド', '0'),
+          ratingCard('アズール', '8'),
+        ].join('\n'),
+      },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 2,
+      numColumns: 2,
+      values: [
+        ['アズール', '8'],
+        ['カタン', '5'],
+      ],
+    },
+  ]);
+});
+
+test('RatingUpdater skips a zero-rating-only page after earlier importable rows', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  // Later all-"0" pages are skips (like exclusions), not markup failures, so
+  // earlier scored rows must still publish.
+  const sandbox = createRatingSandbox({
+    ratingsSheet,
+    userId: 'user-1',
+    responses: [
+      { status: 200, body: ratingCard('カタン', '5') },
+      { status: 200, body: ratingCard('チッキットゥライド', '0') },
+      { status: 200, body: emptyPlayedGamesPage() },
+    ],
+  });
+  const context = loadRatingUpdater(sandbox);
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
+    {
+      type: 'setValues',
+      row: 2,
+      column: 1,
+      numRows: 1,
+      numColumns: 2,
+      values: [['カタン', '5']],
+    },
+  ]);
+});
+
 test('RatingUpdater keeps existing rows when a later page has titles but no extractable ratings', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   // Earlier pages with real rows must not be written when a later page yields
