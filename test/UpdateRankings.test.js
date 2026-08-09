@@ -63,6 +63,26 @@ function expectedRankingRow() {
   ];
 }
 
+test('RankingUpdater logs and skips when the Rankings sheet is missing', () => {
+  const logs = [];
+  const sandbox = createSandbox({
+    sheets: {},
+    responses: [],
+  });
+  sandbox.Logger = {
+    log(message) {
+      logs.push(message);
+    },
+  };
+  const context = loadRankings(sandbox);
+
+  context.RankingUpdater.run();
+
+  assert.deepEqual(logs, [
+    'Rankings sheet "Rankings" is missing; skipping ranking import until the tab is restored.',
+  ]);
+});
+
 test('RankingUpdater skips clearContent for a header-only Rankings sheet and writes fetched games', () => {
   const rankingsSheet = createSheet('Rankings', 1);
   const sandbox = createSandbox({

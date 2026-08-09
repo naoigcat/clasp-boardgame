@@ -47,6 +47,11 @@ class RatingUpdater {
   static run(): void {
     const sheet = findSheet(SHEET_NAMES.RATINGS);
     if (sheet === null) {
+      // Sync import: log and skip so a renamed Ratings tab is visible in the
+      // execution log instead of looking like a successful no-op.
+      Logger.log(
+        `Ratings sheet "${SHEET_NAMES.RATINGS}" is missing; skipping rating import until the tab is restored.`,
+      );
       return;
     }
 
