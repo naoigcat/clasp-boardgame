@@ -51,13 +51,19 @@ class GameUpdater {
   /**
    * Updates one batch of stale game rows and reports whether work remains.
    *
-   * Returns false when the Games sheet is missing or every linked row is still
-   * within the refresh window, signaling the coordinator to move to Titles.
+   * Returns false when every linked row is still within the refresh window,
+   * signaling the coordinator to move to Titles. A missing Games tab returns
+   * true after logging so a rename or deletion is not treated as completion.
    */
   static run(): boolean {
     const sheet = findSheet(SHEET_NAMES.GAMES);
     if (sheet === null) {
-      return false;
+      // Returning true keeps UPDATE_STEP on games; false would skip to Titles
+      // and hide a renamed or deleted contract tab as a successful Games finish.
+      Logger.log(
+        `Games sheet "${SHEET_NAMES.GAMES}" is missing; keeping the Games phase until the tab is restored.`,
+      );
+      return true;
     }
 
     const rows = GameUpdater.loadRows(sheet);
