@@ -355,7 +355,7 @@ class GameUpdater {
     }
 
     const document = XmlService.parse(response.getContentText());
-    return getRequiredXmlChild(document.getRootElement(), 'item');
+    return getRequiredXmlChild(getRequiredXmlRootElement(document), 'item');
   }
 
   /**
