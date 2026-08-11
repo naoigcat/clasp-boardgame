@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile_inline: |
-        FROM node:26.5.1-bookworm-slim
+        FROM node:26.7.0-bookworm-slim
         ENV PNPM_HOME=/pnpm
         ENV PATH="$$PNPM_HOME/bin:/deps/node_modules/.bin:$$PATH"
         RUN apt-get update && \
