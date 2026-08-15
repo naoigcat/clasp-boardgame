@@ -50,8 +50,9 @@ function loadScripts(sandbox, scripts) {
   const context = vm.createContext(sandbox);
 
   for (const script of scripts) {
+    // An absolute filename lets Node associate VM coverage with the source file.
     vm.runInContext(compileSource(script.path, script.exports), context, {
-      filename: script.path,
+      filename: path.join(__dirname, '..', '..', script.path),
     });
   }
 

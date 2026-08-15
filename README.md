@@ -126,7 +126,8 @@ mise run build
 
 ## Verify
 
-Run the TypeScript check and unit tests before pushing a script change:
+Run the TypeScript check and unit tests before pushing a script change. The test
+command prints a coverage report after the test results:
 
 ```sh
 mise run typecheck
