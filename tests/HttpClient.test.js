@@ -61,6 +61,20 @@ test('HttpClient.get mutes HTTP exceptions so callers can handle non-2xx statuse
   assert.equal(fetchCalls[0].options.muteHttpExceptions, true);
 });
 
+test('HttpClient.get preserves caller request options', () => {
+  const { fetchCalls, UrlFetchApp } = createUrlFetchApp(200, 'ok');
+  const context = loadHttpClient({ UrlFetchApp });
+
+  context.HttpClient.get('https://example.com/resource', {
+    headers: { Accept: 'application/json' },
+    method: 'post',
+  });
+
+  assert.equal(fetchCalls[0].options.headers.Accept, 'application/json');
+  assert.equal(fetchCalls[0].options.method, 'post');
+  assert.equal(fetchCalls[0].options.muteHttpExceptions, true);
+});
+
 test('HttpClient.getWithOptionalBearerToken mutes HTTP exceptions and preserves auth', () => {
   const { fetchCalls, UrlFetchApp } = createUrlFetchApp(429, 'rate limited');
   const context = loadHttpClient({ UrlFetchApp });
