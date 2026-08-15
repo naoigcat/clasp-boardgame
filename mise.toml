@@ -41,4 +41,4 @@ run = "docker compose run --rm --entrypoint bash clasp -c 'tsc --noEmit'"
 
 [tasks.test]
 description = "Run unit tests against the Apps Script harness"
-run = "docker compose run --rm --entrypoint bash clasp -c 'node --test tests/*.test.js'"
+run = "docker compose run --rm --entrypoint bash clasp -c 'node --test --experimental-test-coverage tests/*.test.js'"
