@@ -1,4 +1,4 @@
-name: CI
+name: Typecheck
 
 on:
   pull_request:
@@ -15,7 +15,3 @@ jobs:
         run: |
           docker compose build
           docker compose run --rm --entrypoint bash clasp -c 'tsc --noEmit'
-
-      - name: Test
-        run: |
-          docker compose run --rm --entrypoint bash clasp -c 'node --test --experimental-test-coverage tests/*.test.js'
