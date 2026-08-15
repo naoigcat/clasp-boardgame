@@ -57,11 +57,7 @@ class RankingUpdater {
     }
 
     const response = HttpClient.get(BOARD_GAME_ARENA_CONFIG.HOME_PAGE_URL);
-    if (response.getResponseCode() !== 200) {
-      throw new Error(
-        `Board Game Arena returned HTTP ${response.getResponseCode()}`,
-      );
-    }
+    HttpClient.requireSuccess(response, 'Board Game Arena');
 
     const rows = RankingUpdater.parseRows(response.getContentText());
     if (rows.length === 0) {

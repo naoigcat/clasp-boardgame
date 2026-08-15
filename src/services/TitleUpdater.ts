@@ -235,11 +235,7 @@ class TitleUpdater {
     TitleUpdater.assertAllowedGamePanelUrl(gameUrl);
 
     const response = HttpClient.get(gameUrl);
-    if (response.getResponseCode() !== 200) {
-      throw new Error(
-        `Board Game Arena returned HTTP ${response.getResponseCode()}`,
-      );
-    }
+    HttpClient.requireSuccess(response, 'Board Game Arena');
 
     const match = response
       .getContentText()

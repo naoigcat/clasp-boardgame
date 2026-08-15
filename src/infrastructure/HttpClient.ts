@@ -33,6 +33,26 @@ class HttpClient {
   }
 
   /**
+   * Rejects a response that cannot be used as a complete source snapshot.
+   *
+   * Keeping status handling here prevents each updater from drifting on which
+   * response codes are considered safe while preserving source-specific errors.
+   */
+  static requireSuccess(
+    response: GoogleAppsScript.URL_Fetch.HTTPResponse,
+    sourceName?: string,
+  ): void {
+    const responseCode = response.getResponseCode();
+    if (responseCode === 200) {
+      return;
+    }
+
+    const sourcePrefix =
+      sourceName === undefined ? '' : `${sourceName} returned `;
+    throw new Error(`${sourcePrefix}HTTP ${responseCode}`);
+  }
+
+  /**
    * Fetches a URL and adds a Bearer token when one has been configured.
    *
    * BoardGameGeek allows anonymous access but applies stricter rate limits.
