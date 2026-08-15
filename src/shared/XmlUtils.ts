@@ -32,7 +32,10 @@ function getRequiredXmlRootElement(document: XmlDocument): XmlElement {
  * BoardGameGeek responses are expected to contain a fixed shape. Failing early
  * with the missing child name is easier to diagnose than a later null dereference.
  */
-function getRequiredXmlChild(parent: XmlElement, childName: string): XmlElement {
+function getRequiredXmlChild(
+  parent: XmlElement,
+  childName: string,
+): XmlElement {
   const child = parent.getChild(childName);
   if (child === null) {
     throw new Error(`Required XML child "${childName}" was not found`);
