@@ -18,4 +18,4 @@ jobs:
 
       - name: Test
         run: |
-          docker compose run --rm --entrypoint bash clasp -c 'node --test test/*.test.js'
+          docker compose run --rm --entrypoint bash clasp -c 'node --test tests/*.test.js'
