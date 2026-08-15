@@ -74,28 +74,9 @@ class RatingUpdater {
       firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
     );
 
-    // fetchAllRows returns [] only for Bodoge's explicit empty-list marker.
-    // Cards that matched but yielded no titles throw instead, so a markup
-    // change cannot wipe Ratings. Non-empty imports write first, then trim
-    // surplus, so a failed setValues leaves the previous complete snapshot.
-    if (rows.length === 0) {
-      clearSheetDataRows(sheet, SHEET_LAYOUT.RATING_COLUMN_COUNT);
-      return;
-    }
-
-    sheet
-      .getRange(
-        SHEET_LAYOUT.FIRST_DATA_ROW,
-        SHEET_LAYOUT.DEFAULT_START_COLUMN,
-        rows.length,
-        SHEET_LAYOUT.RATING_COLUMN_COUNT,
-      )
-      .setValues(escapeSheetValues(rows));
-    clearSurplusSheetDataRows(
-      sheet,
-      rows.length,
-      SHEET_LAYOUT.RATING_COLUMN_COUNT,
-    );
+    // fetchAllRows returns [] only for Bodoge's explicit empty-list marker;
+    // writeSheetSnapshot clears it without issuing an invalid zero-row write.
+    writeSheetSnapshot(sheet, rows, SHEET_LAYOUT.RATING_COLUMN_COUNT);
   }
 
   /**

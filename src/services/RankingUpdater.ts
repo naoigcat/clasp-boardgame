@@ -73,21 +73,7 @@ class RankingUpdater {
       return;
     }
 
-    // Write first, then trim surplus rows so a failed setValues leaves the
-    // previous Rankings snapshot intact instead of an empty header-only sheet.
-    sheet
-      .getRange(
-        SHEET_LAYOUT.FIRST_DATA_ROW,
-        SHEET_LAYOUT.DEFAULT_START_COLUMN,
-        rows.length,
-        SHEET_LAYOUT.RANKING_COLUMN_COUNT,
-      )
-      .setValues(escapeSheetValues(rows));
-    clearSurplusSheetDataRows(
-      sheet,
-      rows.length,
-      SHEET_LAYOUT.RANKING_COLUMN_COUNT,
-    );
+    writeSheetSnapshot(sheet, rows, SHEET_LAYOUT.RANKING_COLUMN_COUNT);
   }
 
   /**
