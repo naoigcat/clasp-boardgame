@@ -6,7 +6,10 @@
  * regular expression so a later field that also contains brackets cannot be
  * accidentally consumed into the target array.
  */
-function extractEmbeddedJsonArray(page: string, propertyName: string): unknown[] {
+function extractEmbeddedJsonArray(
+  page: string,
+  propertyName: string,
+): unknown[] {
   const propertyToken = `"${propertyName}"`;
   const propertyIndex = page.indexOf(propertyToken);
   if (propertyIndex === -1) {
@@ -23,7 +26,9 @@ function extractEmbeddedJsonArray(page: string, propertyName: string): unknown[]
   }
 
   const arrayEndIndex = findJsonArrayEnd(page, arrayStartIndex);
-  return JSON.parse(page.slice(arrayStartIndex, arrayEndIndex + 1)) as unknown[];
+  return JSON.parse(
+    page.slice(arrayStartIndex, arrayEndIndex + 1),
+  ) as unknown[];
 }
 
 /**

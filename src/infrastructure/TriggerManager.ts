@@ -12,10 +12,7 @@ class TriggerManager {
    * still repairing duplicate triggers left by prior executions or failed
    * cleanups.
    */
-  static ensureSingle(
-    handlerFunction: string,
-    intervalMinutes: number,
-  ): void {
+  static ensureSingle(handlerFunction: string, intervalMinutes: number): void {
     const matchingTriggers = ScriptApp.getProjectTriggers().filter(
       (trigger) => trigger.getHandlerFunction() === handlerFunction,
     );
