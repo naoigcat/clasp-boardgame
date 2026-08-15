@@ -108,7 +108,7 @@ class GameUpdater {
   private static loadRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
   ): GameSheetRow[] {
-    const dataRowCount = sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    const dataRowCount = getDataRowCount(sheet);
     if (dataRowCount <= 0) {
       return [];
     }

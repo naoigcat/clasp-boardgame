@@ -114,8 +114,7 @@ class TitleUpdater {
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
     rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet | null,
   ): TitleSheetRow[] {
-    const titlesDataRowCount =
-      titlesSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    const titlesDataRowCount = getDataRowCount(titlesSheet);
     const rows =
       titlesDataRowCount <= 0
         ? []
@@ -136,8 +135,7 @@ class TitleUpdater {
       return rows;
     }
 
-    const rankingsDataRowCount =
-      rankingsSheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+    const rankingsDataRowCount = getDataRowCount(rankingsSheet);
     if (rankingsDataRowCount > 0) {
       rankingsSheet
         .getRange(

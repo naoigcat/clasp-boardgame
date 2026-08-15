@@ -18,6 +18,17 @@ function findSheet(
 }
 
 /**
+ * Returns the number of rows below the shared header that contain sheet data.
+ *
+ * Keeping the header arithmetic here gives every range reader and writer the
+ * same empty-sheet behavior without allowing an open-ended range to scan the
+ * spreadsheet's maximum row count.
+ */
+function getDataRowCount(sheet: GoogleAppsScript.Spreadsheet.Sheet): number {
+  return Math.max(0, sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1);
+}
+
+/**
  * Clears only data rows below a header when such rows exist.
  *
  * Apps Script rejects zero-height ranges, so this guard keeps an empty sheet a
@@ -30,7 +41,7 @@ function clearSheetDataRows(
   columnCount: number,
   startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
 ): void {
-  const dataRowCount = sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
+  const dataRowCount = getDataRowCount(sheet);
   if (dataRowCount <= 0) {
     return;
   }
@@ -90,7 +101,7 @@ function clearSurplusSheetDataRows(
   startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
 ): void {
   const firstSurplusRow = SHEET_LAYOUT.FIRST_DATA_ROW + writtenRowCount;
-  const surplusRowCount = sheet.getLastRow() - firstSurplusRow + 1;
+  const surplusRowCount = Math.max(0, sheet.getLastRow() - firstSurplusRow + 1);
   if (surplusRowCount <= 0) {
     return;
   }
