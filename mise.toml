@@ -35,6 +35,10 @@ run = [
 description = "Format code with Prettier"
 run = "docker compose run --rm --entrypoint bash clasp -c 'prettier --write .'"
 
+[tasks.markdownlint]
+description = "Lint Markdown files"
+run = "docker run --rm -v \"$PWD:/work\" -w /work davidanson/markdownlint-cli2:v0.23.0"
+
 [tasks.typecheck]
 description = "Type-check Apps Script source without emitting JavaScript"
 run = "docker compose run --rm --entrypoint bash clasp -c 'tsc --noEmit'"
