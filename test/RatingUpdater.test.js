@@ -446,10 +446,10 @@ test('RatingUpdater keeps existing rows when every card rating attribute is empt
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
-test('RatingUpdater keeps existing rows when every card rating is zero', () => {
+test('RatingUpdater clears Ratings when every card rating is zero', () => {
   const ratingsSheet = createSheet('Ratings', 3);
-  // Unrated "0" cards are skipped like exclusions; all-skipped imports keep
-  // the prior snapshot via the no-importable-titles path (not markup abort).
+  // Bodoge's explicit unrated marker proves this is a valid empty snapshot;
+  // keeping the previous rows would leave another user's Ratings behind.
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
@@ -460,11 +460,17 @@ test('RatingUpdater keeps existing rows when every card rating is zero', () => {
   });
   const context = loadRatingUpdater(sandbox);
 
-  assert.throws(
-    () => context.RatingUpdater.run(),
-    /Bodoge ratings pages contained cards but yielded no importable titles/,
-  );
-  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), [
+    {
+      type: 'clearContent',
+      row: 2,
+      column: 1,
+      numRows: 2,
+      numColumns: 2,
+    },
+  ]);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 

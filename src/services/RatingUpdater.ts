@@ -9,6 +9,8 @@ type RatingSheetRow = [string, string];
 interface RatingPage {
   /** Whether the page contains cards, which signals that pagination continues. */
   readonly hasCards: boolean;
+  /** Whether at least one card explicitly reported an unrated result ("0"). */
+  readonly hasUnratedCards: boolean;
   /**
    * True when at least one card matched but had no Japanese title to extract.
    * Distinct from an all-excluded page, which has cards and zero rows without
@@ -111,6 +113,7 @@ class RatingUpdater {
     // Distinguishes Bodoge's explicit empty list from card markup that matched
     // but produced no importable titles (missing titles, exclusions, or all "0").
     let sawCards = false;
+    let sawUnratedCards = false;
 
     // +1 lets a full MAX_PAGE_COUNT card collection still fetch the empty
     // marker that ends pagination; card pages past the cap throw below.
@@ -129,8 +132,8 @@ class RatingUpdater {
       const page = RatingUpdater.parsePage(response.getContentText());
       if (!page.hasCards) {
         // Outer card wrappers without extractable titles must not clear Ratings;
-        // only a marker-only response (no cards seen) may return [].
-        if (sawCards && rows.length === 0) {
+        // an explicit "0" also proves that a zero-row result is valid.
+        if (sawCards && rows.length === 0 && !sawUnratedCards) {
           throw new Error(
             'Bodoge ratings pages contained cards but yielded no importable titles',
           );
@@ -147,6 +150,7 @@ class RatingUpdater {
       }
 
       sawCards = true;
+      sawUnratedCards = sawUnratedCards || page.hasUnratedCards;
       // A later page with card chrome but no Japanese titles must not let earlier
       // pages publish a partial Ratings snapshot; fail the whole import instead.
       // Excluded-title-only pages still report hasUnextractableCards=false so
@@ -196,6 +200,7 @@ class RatingUpdater {
       pageHtml.match(/<a class="list--interests-item-title"[\s\S]*?<\/a>/g) ??
       [];
     const rows: RatingSheetRow[] = [];
+    let hasUnratedCards = false;
     let hasUnextractableCards = false;
     let hasCardsWithoutRatings = false;
 
@@ -218,6 +223,7 @@ class RatingUpdater {
       // Bodoge uses "0" for unrated / privacy-hidden played cards. Skip them
       // like excluded titles so mixed pages can still import real scores.
       if (rating === '0') {
+        hasUnratedCards = true;
         return;
       }
 
@@ -230,6 +236,7 @@ class RatingUpdater {
     if (cards.length > 0) {
       return {
         hasCards: true,
+        hasUnratedCards,
         hasUnextractableCards,
         hasCardsWithoutRatings,
         rows,
@@ -239,6 +246,7 @@ class RatingUpdater {
     if (pageHtml.includes(BODOGE_EMPTY_PLAYED_GAMES_MARKER)) {
       return {
         hasCards: false,
+        hasUnratedCards: false,
         hasUnextractableCards: false,
         hasCardsWithoutRatings: false,
         rows: [],
