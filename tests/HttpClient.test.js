@@ -75,6 +75,17 @@ test('HttpClient.get preserves caller request options', () => {
   assert.equal(fetchCalls[0].options.muteHttpExceptions, true);
 });
 
+test('HttpClient.requireSuccess preserves source-specific HTTP errors', () => {
+  const { UrlFetchApp } = createUrlFetchApp(503, 'unavailable');
+  const context = loadHttpClient({ UrlFetchApp });
+  const response = context.HttpClient.get('https://example.com/outage');
+
+  assert.throws(
+    () => context.HttpClient.requireSuccess(response, 'Bodoge'),
+    /Bodoge returned HTTP 503/,
+  );
+});
+
 test('HttpClient.getWithOptionalBearerToken mutes HTTP exceptions and preserves auth', () => {
   const { fetchCalls, UrlFetchApp } = createUrlFetchApp(429, 'rate limited');
   const context = loadHttpClient({ UrlFetchApp });

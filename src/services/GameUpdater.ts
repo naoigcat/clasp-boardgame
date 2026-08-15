@@ -332,9 +332,7 @@ class GameUpdater {
     // into a burst of requests.
     Utilities.sleep(BOARD_GAME_GEEK_CONFIG.REQUEST_DELAY_MILLISECONDS);
 
-    if (response.getResponseCode() !== 200) {
-      throw new Error(`HTTP ${response.getResponseCode()}`);
-    }
+    HttpClient.requireSuccess(response);
 
     const document = XmlService.parse(response.getContentText());
     return getRequiredXmlChild(getRequiredXmlRootElement(document), 'item');

@@ -106,9 +106,7 @@ class RatingUpdater {
       const response = HttpClient.get(
         RatingUpdater.buildPageUrl(userId, pageNumber),
       );
-      if (response.getResponseCode() !== 200) {
-        throw new Error(`Bodoge returned HTTP ${response.getResponseCode()}`);
-      }
+      HttpClient.requireSuccess(response, 'Bodoge');
 
       const page = RatingUpdater.parsePage(response.getContentText());
       if (!page.hasCards) {
