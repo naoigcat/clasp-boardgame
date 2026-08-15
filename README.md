@@ -77,7 +77,9 @@ mise run build     # Build the Docker image
 mise run login     # Authenticate clasp (see Login below)
 ```
 
-If you are connecting to an existing Apps Script project, skip clone and run `mise run pull` instead. To download a new project by its script ID (from the GAS project URL), run:
+If you are connecting to an existing Apps Script project, skip clone and run
+`mise run pull` instead. To download a new project by its script ID (from the
+GAS project URL), run:
 
 ```sh
 mise run clone {SCRIPT_ID}
@@ -91,7 +93,9 @@ mise run push
 
 ### Script properties
 
-Some features call the [BoardGameGeek XML API](https://boardgamegeek.com/using_the_xml_api) with a Bearer token. Set the `TOKEN` script property in the Apps Script project:
+Some features call the [BoardGameGeek XML API](https://boardgamegeek.com/using_the_xml_api)
+with a Bearer token. Set the `TOKEN` script property in the Apps Script
+project:
 
 1. Open the project in the [Apps Script editor](https://script.google.com/).
 2. Go to **Project Settings** (gear icon) → **Script properties**.
@@ -126,10 +130,11 @@ mise run build
 
 ## Verify
 
-Run the TypeScript check and unit tests before pushing a script change. The test
-command prints a coverage report after the test results:
+Run the Markdown lint, TypeScript check, and unit tests before pushing a script
+change. The test command prints a coverage report after the test results:
 
 ```sh
+mise run markdownlint
 mise run typecheck
 mise run test
 ```
@@ -137,10 +142,11 @@ mise run test
 Use the following routine for local changes:
 
 1. Run `mise run format` after editing TypeScript or documentation.
-2. Run `mise run typecheck` to validate the Apps Script types without
+2. Run `mise run markdownlint` after editing Markdown documentation.
+3. Run `mise run typecheck` to validate the Apps Script types without
    generating JavaScript.
-3. Run `mise run test` to execute the Node-based Apps Script harness.
-4. Run `mise run push` only after the checks pass and you intend to deploy.
+4. Run `mise run test` to execute the Node-based Apps Script harness.
+5. Run `mise run push` only after the checks pass and you intend to deploy.
 
 The test harness validates service behavior without contacting the external
 sites. It is therefore suitable for checking parsing, queue transitions, and
