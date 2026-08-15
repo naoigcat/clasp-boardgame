@@ -328,6 +328,9 @@ class TitleUpdater {
     return (
       sourceTitle
         // Drop hyphen-wrapped edition or marketing suffixes.
+        // Keep this broad rule as an intentional policy for the current BGA
+        // catalog; a concrete source title must justify narrowing it or adding
+        // a dedicated alias for an ambiguous hyphenated subtitle.
         .replace(/-.*-/g, '')
         // Prefer full-width ampersands used by Japanese spreadsheet titles.
         .replace(/&amp;/g, '＆')
