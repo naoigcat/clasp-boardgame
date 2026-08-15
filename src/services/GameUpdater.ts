@@ -141,44 +141,16 @@ class GameUpdater {
   }
 
   /**
-   * Writes columns B through AA for every managed game row in one operation.
-   *
-   * Column A is omitted on purpose so BoardGameGeek hyperlinks are not replaced
-   * by plain-text URLs during the batch flush. After a successful write, surplus
-   * B–AA cells below the last managed link are cleared so a shortened list cannot
-   * leave stale metadata that formulas or manual review would misread. An empty
-   * managed list skips setValues and clears every B–AA data row the same way
-   * Titles and Ratings clear on an empty write, without touching column A.
+   * Prepares Games values and delegates snapshot persistence to the shared sheet
+   * gateway. Column A stays outside the payload so rich-text links survive.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     rows: readonly GameSheetRow[],
   ): void {
-    if (rows.length === 0) {
-      clearSurplusSheetDataRows(
-        sheet,
-        0,
-        SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
-        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
-      );
-      return;
-    }
-
-    // Escape at write time so BoardGameGeek recommendation labels and error
-    // text cannot become executable formulas when the workbook is shared.
-    sheet
-      .getRange(
-        SHEET_LAYOUT.FIRST_DATA_ROW,
-        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
-        rows.length,
-        rows[0].values.length,
-      )
-      .setValues(
-        escapeSheetValues(rows.map((row) => GameUpdater.valuesForWrite(row))),
-      );
-    clearSurplusSheetDataRows(
+    writeSheetSnapshot(
       sheet,
-      rows.length,
+      rows.map((row) => GameUpdater.valuesForWrite(row)),
       SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
       SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
     );

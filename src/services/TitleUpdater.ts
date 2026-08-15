@@ -47,7 +47,7 @@ class TitleUpdater {
     if (TitleUpdater.countPendingRows(rows) === 0) {
       // Still compact blank URL slots when every title is already normalized so
       // mid-sheet empty rows do not linger until the next pending URL appears.
-      TitleUpdater.writeRows(titlesSheet, rows);
+      writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
       return false;
     }
 
@@ -78,7 +78,7 @@ class TitleUpdater {
       TitleUpdater.updateRow(row);
     }
 
-    TitleUpdater.writeRows(titlesSheet, rows);
+    writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
     if (retryingOnlyFailures) {
       // One completed retry pass ends the cycle. If the soft runtime budget
       // stopped the pass early, keep the trigger so remaining failures still
@@ -162,38 +162,6 @@ class TitleUpdater {
     }
 
     return rows;
-  }
-
-  /**
-   * Writes compacted title rows and clears any prior surplus physical rows.
-   *
-   * loadRows drops blank URL slots so the in-memory list is shorter than the
-   * sheet's previous used range. Writing first, then trimming only surplus rows,
-   * keeps existing Titles data intact if setValues fails and still prevents
-   * abandoned cells from keeping duplicate URLs after a successful rewrite.
-   */
-  private static writeRows(
-    sheet: GoogleAppsScript.Spreadsheet.Sheet,
-    rows: TitleSheetRow[],
-  ): void {
-    if (rows.length === 0) {
-      clearSheetDataRows(sheet, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
-      return;
-    }
-
-    sheet
-      .getRange(
-        SHEET_LAYOUT.FIRST_DATA_ROW,
-        SHEET_LAYOUT.TITLES_START_COLUMN,
-        rows.length,
-        SHEET_LAYOUT.TITLE_COLUMN_COUNT,
-      )
-      .setValues(escapeSheetValues(rows));
-    clearSurplusSheetDataRows(
-      sheet,
-      rows.length,
-      SHEET_LAYOUT.TITLE_COLUMN_COUNT,
-    );
   }
 
   /**

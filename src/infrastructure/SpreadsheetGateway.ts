@@ -22,12 +22,13 @@ function findSheet(
  *
  * Apps Script rejects zero-height ranges, so this guard keeps an empty sheet a
  * valid state rather than an exceptional one. Headers stay intact because data
- * rewrites always start at row 2. Prefer clearSurplusSheetDataRows after a
- * successful setValues when replacing a non-empty snapshot.
+ * rewrites always start at row 2. The optional start column lets Games preserve
+ * its rich-text links while clearing only the value columns it owns.
  */
 function clearSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   columnCount: number,
+  startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
 ): void {
   const dataRowCount = sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1;
   if (dataRowCount <= 0) {
@@ -37,11 +38,40 @@ function clearSheetDataRows(
   sheet
     .getRange(
       SHEET_LAYOUT.FIRST_DATA_ROW,
-      SHEET_LAYOUT.DEFAULT_START_COLUMN,
+      startColumn,
       dataRowCount,
       columnCount,
     )
     .clearContent();
+}
+
+/**
+ * Replaces a sheet snapshot and removes rows abandoned by a shorter payload.
+ *
+ * Writing before trimming keeps the previous snapshot available when the new
+ * write fails; the helper owns that ordering so each updater preserves the same
+ * failure behavior without duplicating range arithmetic.
+ */
+function writeSheetSnapshot(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  rows: readonly SpreadsheetCellRow[],
+  columnCount: number,
+  startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
+): void {
+  if (rows.length === 0) {
+    clearSheetDataRows(sheet, columnCount, startColumn);
+    return;
+  }
+
+  sheet
+    .getRange(
+      SHEET_LAYOUT.FIRST_DATA_ROW,
+      startColumn,
+      rows.length,
+      columnCount,
+    )
+    .setValues(escapeSheetValues(rows));
+  clearSurplusSheetDataRows(sheet, rows.length, columnCount, startColumn);
 }
 
 /**
