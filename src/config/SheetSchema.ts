@@ -43,11 +43,11 @@ const SHEET_LAYOUT = {
  * columns follow immediately so they stay aligned with the real sheet layout.
  */
 const GAME_VALUE_COLUMN = {
-  /** Column C: array-formula input that resolves the display title for the row. */
+  /** Column C: array-formula input that derives the year from the date in column B. */
   DERIVED_TITLE: 1,
   /**
-   * Column F: array-formula input that resolves the preferred player-count
-   * summary.
+   * Column F: array-formula input that derives the classification from the
+   * location in column E.
    */
   DERIVED_PLAYER_COUNT: 4,
   /**
@@ -69,7 +69,7 @@ const GAME_VALUE_COLUMN = {
   DERIVED_RANKING: 21,
   /** Column X: array-formula input that joins the row to Ratings data. */
   DERIVED_RATING: 22,
-  /** Column Y: array-formula input that joins the row to Titles matching. */
+  /** Column Y: array-formula input that looks up play counts from Per Game. */
   DERIVED_TITLE_MATCH: 23,
   /**
    * Column Z: timestamp of the last BoardGameGeek update attempt. Advanced on
