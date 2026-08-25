@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.20.0",
   "dependencies": {
-    "@google/clasp": "3.3.0",
+    "@google/clasp": "3.4.0",
     "@types/google-apps-script": "^2.0.12",
     "prettier": "3.9.6",
     "typescript": "5.9.3"
