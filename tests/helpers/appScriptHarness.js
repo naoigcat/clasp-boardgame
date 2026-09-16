@@ -6,25 +6,54 @@
  * the Apps Script services each scenario needs.
  */
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
-const ts = require('typescript');
 
 /**
- * Transpiles one non-module Apps Script source file and exposes selected names
- * to a test sandbox, mirroring Apps Script's global execution model.
+ * Compiles one non-module Apps Script source file and exposes selected names
+ * to a test sandbox, mirroring Apps Script's global execution model. TypeScript
+ * 7 no longer exposes the JavaScript transpiler API, so use its no-check CLI
+ * for the same transpile-only behavior that the old API provided here.
  */
 function compileSource(relativePath, exportNames) {
   const sourcePath = path.join(__dirname, '..', '..', relativePath);
-  const source = fs.readFileSync(sourcePath, 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.None,
-      // Match the production compiler so global script declarations behave alike.
-      target: ts.ScriptTarget.ES5,
-    },
-  }).outputText;
+  const outputDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'clasp-boardgame-ts-'),
+  );
+
+  let output;
+  try {
+    execFileSync(
+      'tsc',
+      [
+        '--ignoreConfig',
+        '--noCheck',
+        '--target',
+        'ES2015',
+        '--module',
+        'ES2015',
+        '--outDir',
+        outputDirectory,
+        sourcePath,
+      ],
+      { stdio: 'pipe' },
+    );
+
+    const outputPath = path.join(
+      outputDirectory,
+      `${path.basename(relativePath, path.extname(relativePath))}.js`,
+    );
+    output = fs.readFileSync(outputPath, 'utf8');
+  } finally {
+    fs.rmSync(outputDirectory, { force: true, recursive: true });
+  }
+
+  // Keep top-level Apps Script declarations accessible as VM global properties.
+  // ES5 transpilation did this implicitly; ES2015 preserves const/let instead.
+  output = output.replace(/^(const|let)\s+/gm, 'var ');
   const exports = exportNames
     .map((name) => `globalThis.${name} = ${name};`)
     .join('\n');

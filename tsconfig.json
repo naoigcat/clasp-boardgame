@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES5",
-    "module": "none",
+    "target": "ES2015",
+    "module": "ES2015",
     "lib": ["ES2020"],
     "rootDir": "src",
     "strict": true,
-    "esModuleInterop": false,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "typeRoots": ["/deps/node_modules/@types"]
+    "typeRoots": ["/deps/node_modules/@types"],
+    "types": ["google-apps-script"]
   },
   "include": ["src/**/*.ts"]
 }
