@@ -165,6 +165,50 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
   ]);
 });
 
+test('RatingUpdater normalizes title variants before writing ratings', () => {
+  const titles = [
+    ['エバーデール：真珠の入り江 第2版', 'エバーデール：真珠の入り江'],
+    ['ドミニオン：第二版', 'ドミニオン'],
+    ['ワンナイト人狼 モンスターver', 'ワンナイト人狼 モンスターバージョン'],
+    ['ワンナイト人狼 超人ver', 'ワンナイト人狼 超人バージョン'],
+    ['ワンナイト人狼：狂気ver', 'ワンナイト人狼 狂気バージョン'],
+    ['花見小路：日本語版', '花見小路'],
+    ['カタン 第３版', 'カタン'],
+    ['カタン：新版', 'カタン'],
+    ['別のゲーム: 特別VER.', '別のゲーム 特別バージョン'],
+    ['別のゲーム：日本語版', '別のゲーム'],
+    ['エバーデール：真珠の入り江', 'エバーデール：真珠の入り江'],
+    ['ワンナイト人狼 狂気バージョン', 'ワンナイト人狼 狂気バージョン'],
+    ['Clover', 'Clover'],
+    ['第2版のゲーム', '第2版のゲーム'],
+    ['ドミニオン：基本カードセット', null],
+  ];
+  const ratingsSheet = createSheet('Ratings', 1);
+  const context = loadRatingUpdater(
+    createRatingSandbox({
+      ratingsSheet,
+      userId: 'user-1',
+      responses: [
+        {
+          status: 200,
+          body: titles
+            .map(([source]) => ratingCard(source, '6', ['have']))
+            .join('\n'),
+        },
+        { status: 200, body: emptyGamesPage() },
+      ],
+    }),
+  );
+
+  context.RatingUpdater.run();
+
+  const expectedRows = titles
+    .filter(([, title]) => title !== null)
+    .map(([, title]) => [title, '6', true, false, false, false])
+    .sort(([a], [b]) => (a > b ? 1 : a < b ? -1 : 0));
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues')[0].values, expectedRows);
+});
+
 test('RatingUpdater escapes formula-like titles before setValues', () => {
   const formulaTitle = '+cmd|a';
   const ratingsSheet = createSheet('Ratings', 1);

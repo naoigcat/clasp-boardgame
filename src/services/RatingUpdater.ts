@@ -256,8 +256,14 @@ class RatingUpdater {
       .split('/')[0]
       // Drop parenthetical notes that are not part of the canonical title.
       .replace(/（.*）/, '')
-      .replace('：新版', '')
-      .replace('（拡張）', '')
+      // Remove trailing edition labels, including their separator.
+      .replace(
+        /[\s：:]*(?:第[\d０-９一二三四五六七八九十百]+版|新版|日本語版)\s*$/,
+        '',
+      )
+      // Version subtitles use a space; other subtitle colons remain intact.
+      .replace(/[：:]\s*([^：:]+\bver\.?)\s*$/i, ' $1')
+      .replace(/\bver\.?\s*$/i, 'バージョン')
       .replace('&amp;', '＆')
       .trim();
 
