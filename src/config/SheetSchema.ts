@@ -26,7 +26,7 @@ const SHEET_LAYOUT = {
   /** Number of columns written into the Titles sheet. */
   TITLE_COLUMN_COUNT: 4,
   /** Number of columns written into the Ratings sheet. */
-  RATING_COLUMN_COUNT: 2,
+  RATING_COLUMN_COUNT: 6,
   /** Number of columns written into the Rankings sheet. */
   RANKING_COLUMN_COUNT: 15,
 } as const;

@@ -82,7 +82,7 @@ const LEGACY_UPDATE_HANDLER_NAMES = [
 const SCRIPT_PROPERTY_KEYS = {
   /** Optional BoardGameGeek API token that relaxes anonymous request limits. */
   BOARD_GAME_GEEK_TOKEN: 'TOKEN',
-  /** Bodoge user ID whose played-game ratings are imported into Ratings. */
+  /** Bodoge user ID whose ratings and registered games are imported into Ratings. */
   BODOGE_USER_ID: 'BODOGE_USER_ID',
 } as const;
 
@@ -147,10 +147,10 @@ const BOARD_GAME_ARENA_TITLE_CONFIG = {
  * so the same project can target different Bodoge accounts per deployment.
  */
 const BODOGE_CONFIG = {
-  /** URL prefix for the paginated list of played games. */
-  PLAYED_GAMES_URL_PREFIX: 'https://bodoge.hoobby.net/friends/',
+  /** URL prefix for the paginated list of all registered games. */
+  GAMES_URL_PREFIX: 'https://bodoge.hoobby.net/friends/',
   /** URL segment between the user ID and page query. */
-  PLAYED_GAMES_URL_SUFFIX: '/boardgames/played?page=',
+  GAMES_URL_SUFFIX: '/boardgames?page=',
   /** Delay between pages to avoid burst requests to the source site. */
   REQUEST_DELAY_MILLISECONDS: 1000,
   /**

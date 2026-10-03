@@ -42,6 +42,10 @@ function createRatingSandbox({ ratingsSheet, userId, responses }) {
       fetch(url, options = {}) {
         const response = responseQueue.shift();
         assert.ok(response, `Unexpected fetch: ${url}`);
+        assert.equal(
+          url,
+          `https://bodoge.hoobby.net/friends/${encodeURIComponent(userId)}/boardgames?page=${responses.length - responseQueue.length}`,
+        );
         // Mirror UrlFetchApp: non-2xx throws unless muteHttpExceptions is set.
         if (
           (response.status < 200 || response.status >= 300) &&
@@ -90,20 +94,26 @@ function loadRatingUpdater(sandbox) {
  * Joins with newlines to mirror pretty-printed Bodoge HTML; the card regex must
  * span those newlines or parsePage would treat real pages as unrecognized.
  */
-function ratingCard(title, rating) {
+function ratingCard(title, rating, interests = []) {
   return [
+    '<div class="list--interests-item">',
     '<a class="list--interests-item-title">',
     `<div class="list--interests-item-title-japanese">${title}</div>`,
     `<div class="rating--result-stars" data-rating-mode="result" data-rating-result="${rating}">`,
     '</div>',
     '</a>',
+    ...['watching', 'played', 'favorite', 'have'].map(
+      (interest) =>
+        `<span class="friend-interest ${interest} ${interests.includes(interest) ? 'on' : 'off'}"></span>`,
+    ),
+    '</div>',
   ].join('\n');
 }
 
 /**
- * Markup Bodoge uses for an empty played-games page or a page past the last result.
+ * Markup Bodoge uses for an empty registered-games page or a page past the last result.
  */
-function emptyPlayedGamesPage() {
+function emptyGamesPage() {
   return '<p class="empty">検索結果が存在しないか、マイボードゲームが未登録のユーザーです</p>';
 }
 
@@ -135,7 +145,7 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('#hashtag', '4') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -149,8 +159,8 @@ test('RatingUpdater writes aliased ratings without clearing a header-only sheet'
       row: 2,
       column: 1,
       numRows: 1,
-      numColumns: 2,
-      values: [['ハッシュタグ', '4']],
+      numColumns: 6,
+      values: [['ハッシュタグ', '4', false, false, false, false]],
     },
   ]);
 });
@@ -163,7 +173,7 @@ test('RatingUpdater escapes formula-like titles before setValues', () => {
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard(formulaTitle, '5') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -176,9 +186,9 @@ test('RatingUpdater escapes formula-like titles before setValues', () => {
       row: 2,
       column: 1,
       numRows: 1,
-      numColumns: 2,
+      numColumns: 6,
       // Bodoge titles are external text; prefix so Sheets stores them as literals.
-      values: [[`'${formulaTitle}`, '5']],
+      values: [[`'${formulaTitle}`, '5', false, false, false, false]],
     },
   ]);
 });
@@ -190,7 +200,7 @@ test('RatingUpdater writes ratings then clears surplus Ratings rows', () => {
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('#hashtag', '4') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -213,7 +223,7 @@ test('RatingUpdater writes ratings then clears surplus Ratings rows', () => {
       row: 3,
       column: 1,
       numRows: 2,
-      numColumns: 2,
+      numColumns: 6,
     },
   ]);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), [
@@ -222,8 +232,8 @@ test('RatingUpdater writes ratings then clears surplus Ratings rows', () => {
       row: 2,
       column: 1,
       numRows: 1,
-      numColumns: 2,
-      values: [['ハッシュタグ', '4']],
+      numColumns: 6,
+      values: [['ハッシュタグ', '4', false, false, false, false]],
     },
   ]);
 });
@@ -235,7 +245,7 @@ test('RatingUpdater leaves Ratings intact when setValues fails', () => {
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('カタン', '5') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -307,7 +317,7 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
-    responses: [{ status: 200, body: emptyPlayedGamesPage() }],
+    responses: [{ status: 200, body: emptyGamesPage() }],
   });
   const context = loadRatingUpdater(sandbox);
 
@@ -319,7 +329,7 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
       row: 2,
       column: 1,
       numRows: 2,
-      numColumns: 2,
+      numColumns: 6,
     },
   ]);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
@@ -330,6 +340,7 @@ test('RatingUpdater clears Ratings when Bodoge reports an explicit empty list', 
  */
 function cardWithoutJapaneseTitle(englishTitle = 'Catan') {
   return [
+    '<div class="list--interests-item">',
     '<a class="list--interests-item-title">',
     `<div class="list--interests-item-title-english">${englishTitle}</div>`,
     '<div class="rating--result-stars" data-rating-mode="result" data-rating-result="5">',
@@ -343,9 +354,14 @@ function cardWithoutJapaneseTitle(englishTitle = 'Catan') {
  */
 function cardWithoutRatingMarkup(title = 'カタン') {
   return [
+    '<div class="list--interests-item">',
     '<a class="list--interests-item-title">',
     `<div class="list--interests-item-title-japanese">${title}</div>`,
     '</a>',
+    ...['have', 'favorite', 'played', 'watching'].map(
+      (interest) => `<span class="friend-interest ${interest} off"></span>`,
+    ),
+    '</div>',
   ].join('\n');
 }
 
@@ -365,7 +381,7 @@ test('RatingUpdater keeps existing rows when cards match but no titles can be ex
     userId: 'user-1',
     responses: [
       { status: 200, body: cardWithoutJapaneseTitle() },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -389,7 +405,7 @@ test('RatingUpdater keeps existing rows when title cleanup leaves only an empty 
       userId: 'user-1',
       responses: [
         { status: 200, body: ratingCard(title, '4') },
-        { status: 200, body: emptyPlayedGamesPage() },
+        { status: 200, body: emptyGamesPage() },
       ],
     });
     const context = loadRatingUpdater(sandbox);
@@ -404,46 +420,42 @@ test('RatingUpdater keeps existing rows when title cleanup leaves only an empty 
   }
 });
 
-test('RatingUpdater keeps existing rows when cards have titles but no rating markup', () => {
+test('RatingUpdater skips unrated unregistered cards when cards have titles but no rating markup', () => {
   const ratingsSheet = createSheet('Ratings', 3);
-  // Regression: a changed rating attribute must not write title-only rows that
-  // replace the previous complete Ratings snapshot with empty values.
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
     responses: [
       { status: 200, body: cardWithoutRatingMarkup() },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
 
-  assert.throws(
-    () => context.RatingUpdater.run(),
-    /Bodoge ratings page contained cards without extractable ratings/,
+  context.RatingUpdater.run();
+  assert.deepEqual(
+    getCalls(ratingsSheet, 'setValues').map((call) => call.values),
+    [],
   );
-  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
-  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
-test('RatingUpdater keeps existing rows when every card rating attribute is empty', () => {
+test('RatingUpdater skips unrated unregistered cards when every card rating attribute is empty', () => {
   const ratingsSheet = createSheet('Ratings', 3);
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
     responses: [
       { status: 200, body: cardWithEmptyRating() },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
 
-  assert.throws(
-    () => context.RatingUpdater.run(),
-    /Bodoge ratings page contained cards without extractable ratings/,
+  context.RatingUpdater.run();
+  assert.deepEqual(
+    getCalls(ratingsSheet, 'setValues').map((call) => call.values),
+    [],
   );
-  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
-  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
 test('RatingUpdater clears Ratings when every card rating is zero', () => {
@@ -455,7 +467,7 @@ test('RatingUpdater clears Ratings when every card rating is zero', () => {
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('カタン', '0') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -468,7 +480,7 @@ test('RatingUpdater clears Ratings when every card rating is zero', () => {
       row: 2,
       column: 1,
       numRows: 2,
-      numColumns: 2,
+      numColumns: 6,
     },
   ]);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
@@ -490,7 +502,7 @@ test('RatingUpdater imports rated cards from a page mixed with zero ratings', ()
           ratingCard('アズール', '8'),
         ].join('\n'),
       },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -503,10 +515,10 @@ test('RatingUpdater imports rated cards from a page mixed with zero ratings', ()
       row: 2,
       column: 1,
       numRows: 2,
-      numColumns: 2,
+      numColumns: 6,
       values: [
-        ['アズール', '8'],
-        ['カタン', '5'],
+        ['アズール', '8', false, false, false, false],
+        ['カタン', '5', false, false, false, false],
       ],
     },
   ]);
@@ -522,7 +534,7 @@ test('RatingUpdater skips a zero-rating-only page after earlier importable rows'
     responses: [
       { status: 200, body: ratingCard('カタン', '5') },
       { status: 200, body: ratingCard('チッキットゥライド', '0') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -535,33 +547,30 @@ test('RatingUpdater skips a zero-rating-only page after earlier importable rows'
       row: 2,
       column: 1,
       numRows: 1,
-      numColumns: 2,
-      values: [['カタン', '5']],
+      numColumns: 6,
+      values: [['カタン', '5', false, false, false, false]],
     },
   ]);
 });
 
-test('RatingUpdater keeps existing rows when a later page has titles but no extractable ratings', () => {
+test('RatingUpdater skips unrated unregistered cards when a later page has titles but no extractable ratings', () => {
   const ratingsSheet = createSheet('Ratings', 3);
-  // Earlier pages with real rows must not be written when a later page yields
-  // titles without ratings (partial import / changed rating markup mid-run).
   const sandbox = createRatingSandbox({
     ratingsSheet,
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('カタン', '5') },
       { status: 200, body: cardWithoutRatingMarkup('チッキットゥライド') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
 
-  assert.throws(
-    () => context.RatingUpdater.run(),
-    /Bodoge ratings page contained cards without extractable ratings/,
+  context.RatingUpdater.run();
+  assert.deepEqual(
+    getCalls(ratingsSheet, 'setValues').map((call) => call.values),
+    [[['カタン', '5', false, false, false, false]]],
   );
-  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
-  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
 });
 
 test('RatingUpdater keeps existing rows when a later page has cards but no extractable titles', () => {
@@ -574,7 +583,7 @@ test('RatingUpdater keeps existing rows when a later page has cards but no extra
     responses: [
       { status: 200, body: ratingCard('カタン', '5') },
       { status: 200, body: cardWithoutJapaneseTitle('Ticket to Ride') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -597,7 +606,7 @@ test('RatingUpdater skips an excluded-title-only page after earlier importable r
     responses: [
       { status: 200, body: ratingCard('カタン', '5') },
       { status: 200, body: ratingCard('ドミニオン：基本カードセット', '3') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -610,8 +619,8 @@ test('RatingUpdater skips an excluded-title-only page after earlier importable r
       row: 2,
       column: 1,
       numRows: 1,
-      numColumns: 2,
-      values: [['カタン', '5']],
+      numColumns: 6,
+      values: [['カタン', '5', false, false, false, false]],
     },
   ]);
 });
@@ -625,7 +634,7 @@ test('RatingUpdater keeps existing rows when every card title is excluded', () =
     userId: 'user-1',
     responses: [
       { status: 200, body: ratingCard('ドミニオン：基本カードセット', '3') },
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -644,6 +653,10 @@ test('RatingUpdater writes ratings when cards fill exactly MAX_PAGE_COUNT pages 
   const expectedRows = Array.from({ length: maxPageCount }, (_, index) => [
     `ゲーム${index + 1}`,
     '3',
+    false,
+    false,
+    false,
+    false,
   ]).sort(([firstTitle], [secondTitle]) =>
     firstTitle > secondTitle ? 1 : firstTitle < secondTitle ? -1 : 0,
   );
@@ -658,7 +671,7 @@ test('RatingUpdater writes ratings when cards fill exactly MAX_PAGE_COUNT pages 
         status: 200,
         body: ratingCard(`ゲーム${index + 1}`, '3'),
       })),
-      { status: 200, body: emptyPlayedGamesPage() },
+      { status: 200, body: emptyGamesPage() },
     ],
   });
   const context = loadRatingUpdater(sandbox);
@@ -672,7 +685,7 @@ test('RatingUpdater writes ratings when cards fill exactly MAX_PAGE_COUNT pages 
       row: 2,
       column: 1,
       numRows: maxPageCount,
-      numColumns: 2,
+      numColumns: 6,
       values: expectedRows,
     },
   ]);
@@ -701,4 +714,70 @@ test('RatingUpdater keeps existing rows when Bodoge keeps returning rating cards
   );
   assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
   assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+});
+
+test('RatingUpdater imports every combination of registration flags with and without ratings', () => {
+  const interests = ['have', 'favorite', 'played', 'watching'];
+  const expectedRows = [];
+  const cards = [];
+  for (const rating of ['0', '', null, '7']) {
+    for (let bits = 0; bits < 16; bits += 1) {
+      const flags = interests.map((_, index) => Boolean(bits & (1 << index)));
+      const enabled = interests.filter((_, index) => flags[index]);
+      const title = `ゲーム${rating ?? 'missing'}-${bits}`;
+      let card = ratingCard(title, rating, enabled);
+      if (rating === null) {
+        card = card.replace(
+          /<div class="rating--result-stars"[^>]*>\n<\/div>/,
+          '',
+        );
+      }
+      cards.push(card);
+      if (rating === '7' || bits > 0) {
+        expectedRows.push([title, rating === '7' ? rating : '', ...flags]);
+      }
+    }
+  }
+  expectedRows.sort(([a], [b]) => (a > b ? 1 : a < b ? -1 : 0));
+  const ratingsSheet = createSheet('Ratings', 1);
+  const context = loadRatingUpdater(
+    createRatingSandbox({
+      ratingsSheet,
+      userId: 'user-1',
+      responses: [
+        { status: 200, body: cards.join('\n') },
+        { status: 200, body: emptyGamesPage() },
+      ],
+    }),
+  );
+
+  context.RatingUpdater.run();
+
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues')[0].values, expectedRows);
+});
+
+test('RatingUpdater preserves the snapshot when a registration flag cannot be extracted', () => {
+  const ratingsSheet = createSheet('Ratings', 3);
+  const context = loadRatingUpdater(
+    createRatingSandbox({
+      ratingsSheet,
+      userId: 'user-1',
+      responses: [
+        {
+          status: 200,
+          body: ratingCard('カタン', '5').replace(
+            'friend-interest have off',
+            'changed-interest have off',
+          ),
+        },
+      ],
+    }),
+  );
+
+  assert.throws(
+    () => context.RatingUpdater.run(),
+    /without extractable interests/,
+  );
+  assert.deepEqual(getCalls(ratingsSheet, 'setValues'), []);
+  assert.deepEqual(getCalls(ratingsSheet, 'clearContent'), []);
 });

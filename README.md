@@ -104,7 +104,10 @@ project:
 Without `TOKEN`, unauthenticated requests may be rate-limited or fail.
 
 Set the optional `BODOGE_USER_ID` script property to import a Bodoge user's
-played-game ratings. When it is absent or empty, the Ratings sheet is left
+ratings and registered games. Ratings columns A–F contain the title, rating,
+`have`, `favorite`, `played`, and `watching`; the four flags are TRUE/FALSE.
+A row is imported when it has a rating or at least one flag is TRUE; unrated
+games leave column B blank. When the property is absent or empty, the Ratings sheet is left
 unchanged. The `UPDATE_STEP` property is maintained internally while a
 multi-execution update is pending; do not create or edit it manually.
 
