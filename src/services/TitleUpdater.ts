@@ -60,11 +60,24 @@ class TitleUpdater {
       (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
     );
     const retryingOnlyFailures = preferredRows.length === 0;
-    const candidateRows = retryingOnlyFailures ? pendingRows : preferredRows;
+    // Use the full row position: successful retries disappear from pendingRows,
+    // so an offset in that shrinking list would skip later failures.
+    const retryStartRow = Number(
+      ScriptPropertyStore.getOptionalValue(
+        UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
+      ) ?? '0',
+    );
+    const candidateRows = retryingOnlyFailures
+      ? rows.slice(retryStartRow)
+      : preferredRows;
+    let nextRetryRow = retryStartRow;
     const startedAtMilliseconds = Date.now();
     let stoppedForRuntime = false;
 
-    for (const row of candidateRows) {
+    for (const [index, row] of candidateRows.entries()) {
+      if (!TitleUpdater.needsNormalization(row)) {
+        continue;
+      }
       if (
         hasExceededRuntime(
           startedAtMilliseconds,
@@ -76,10 +89,17 @@ class TitleUpdater {
       }
 
       TitleUpdater.updateRow(row);
+      nextRetryRow = retryStartRow + index + 1;
     }
 
     writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
     if (retryingOnlyFailures) {
+      // Advance only after the snapshot succeeds so a write failure cannot
+      // make the next execution skip unsaved retry results.
+      ScriptPropertyStore.set(
+        UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
+        String(nextRetryRow),
+      );
       // One completed retry pass ends the cycle. If the soft runtime budget
       // stopped the pass early, keep the trigger so remaining failures still
       // receive their one retry before permanent errors wait for a later update.

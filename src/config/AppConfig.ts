@@ -28,6 +28,8 @@ const UPDATE_QUEUE_CONFIG = {
   HANDLER_NAME: 'update',
   /** Script-property key that records which asynchronous phase should resume. */
   STEP_PROPERTY_KEY: 'UPDATE_STEP',
+  /** Next Titles row index in the one-shot failure retry pass. */
+  TITLE_RETRY_ROW_PROPERTY_KEY: 'TITLE_RETRY_ROW',
   /** Stored value while BoardGameGeek game metadata is still pending. */
   GAMES_STEP: 'games',
   /** Stored value after Games finishes and title normalization remains. */

@@ -43,6 +43,9 @@ class UpdateCoordinator {
    */
   private static startNewUpdate(): void {
     UpdateCoordinator.removeSupersededTriggers();
+    ScriptPropertyStore.remove(
+      UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
+    );
 
     // Bodoge can spend minutes paging; hard timeout during that work must not
     // strand the queue with no UPDATE_STEP and no trigger until the next menu
@@ -129,6 +132,9 @@ class UpdateCoordinator {
    */
   private static finishUpdate(): void {
     ScriptPropertyStore.remove(UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY);
+    ScriptPropertyStore.remove(
+      UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
+    );
     TriggerManager.removeAll(UPDATE_QUEUE_CONFIG.HANDLER_NAME);
   }
 

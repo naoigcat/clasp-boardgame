@@ -26,6 +26,7 @@ function createUpdateSandbox(
   return {
     calls,
     logs,
+    properties,
     LockService: {
       getScriptLock() {
         return {
@@ -129,6 +130,7 @@ test('update schedules the games phase before single-execution sync imports', ()
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
+    ['deleteProperty', 'TITLE_RETRY_ROW'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
     ['rankings'],
@@ -188,6 +190,7 @@ test('scheduled updates complete games before starting titles with the same hand
     ['getProperty', 'UPDATE_STEP'],
     ['titles'],
     ['deleteProperty', 'UPDATE_STEP'],
+    ['deleteProperty', 'TITLE_RETRY_ROW'],
     ['deleteTrigger', 'update'],
   ]);
 });
@@ -215,6 +218,7 @@ test('update still schedules games when ranking import fails', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
+    ['deleteProperty', 'TITLE_RETRY_ROW'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
     ['rankings'],
@@ -239,6 +243,7 @@ test('update still schedules games when rating import fails', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
+    ['deleteProperty', 'TITLE_RETRY_ROW'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
     ['rankings'],
@@ -264,6 +269,7 @@ test('update still schedules games when both sync imports fail', () => {
     ['deleteTrigger', 'updateTitles'],
     ['deleteTrigger', 'updateRatings'],
     ['deleteTrigger', 'update'],
+    ['deleteProperty', 'TITLE_RETRY_ROW'],
     ['setProperty', 'UPDATE_STEP', 'games'],
     ['ensureTrigger', 'update', 5],
     ['rankings'],
@@ -273,4 +279,20 @@ test('update still schedules games when both sync imports fail', () => {
     'Ranking update failed: BGA catalog unavailable',
     'Rating update failed: Bodoge HTML unrecognized',
   ]);
+});
+
+test('manual update resets the title retry position and final title batch clears it', () => {
+  const sandbox = createUpdateSandbox([false], [true, false]);
+  const context = loadUpdate(sandbox);
+  sandbox.properties.set('TITLE_RETRY_ROW', '180');
+  context.update();
+  assert.equal(sandbox.properties.has('TITLE_RETRY_ROW'), false);
+  context.update({ triggerUid: 'games' });
+  sandbox.properties.set('TITLE_RETRY_ROW', '180');
+  context.update({ triggerUid: 'titles-partial' });
+  assert.equal(sandbox.properties.get('TITLE_RETRY_ROW'), '180');
+  context.update({ triggerUid: 'titles-final' });
+  assert.equal(sandbox.properties.has('TITLE_RETRY_ROW'), false);
+  assert.equal(sandbox.properties.has('UPDATE_STEP'), false);
+  assert.deepEqual(sandbox.calls.at(-1), ['deleteTrigger', 'update']);
 });

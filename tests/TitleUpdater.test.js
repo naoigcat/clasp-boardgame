@@ -39,6 +39,7 @@ function loadTitleUpdaterService(sandbox) {
     { path: 'src/shared/DateUtils.ts', exports: [] },
     { path: 'src/shared/ErrorUtils.ts', exports: [] },
     { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
+    { path: 'src/infrastructure/ScriptPropertyStore.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/services/TitleUpdater.ts', exports: ['TitleUpdater'] },
@@ -76,8 +77,10 @@ function createTitleSandbox({
   failOnSetValues = false,
   rankingUrls = [],
   DateConstructor = Date,
+  properties = new Map(),
 }) {
   const responseQueue = [...responses];
+  const fetchedUrls = [];
   const writes = [];
   const clears = [];
   const operations = [];
@@ -161,6 +164,16 @@ function createTitleSandbox({
   return {
     titlesSheet,
     rankingsSheet,
+    fetchedUrls,
+    PropertiesService: {
+      getScriptProperties() {
+        return {
+          getProperty: (key) => properties.get(key) ?? null,
+          setProperty: (key, value) => properties.set(key, value),
+          deleteProperty: (key) => properties.delete(key),
+        };
+      },
+    },
     SpreadsheetApp: {
       getActiveSpreadsheet() {
         return {
@@ -178,6 +191,7 @@ function createTitleSandbox({
     },
     UrlFetchApp: {
       fetch(url, options = {}) {
+        fetchedUrls.push(url);
         const response = responseQueue.shift();
         assert.ok(response, `Unexpected fetch: ${url}`);
         // Mirror UrlFetchApp: non-2xx throws unless muteHttpExceptions is set.
@@ -759,4 +773,120 @@ test('TitleUpdater leaves Titles intact when compacted setValues fails', () => {
     ['', '', '', ''],
     ['https://ja.boardgamearena.com/gamepanel?game=b', '', '', ''],
   ]);
+});
+
+test('TitleUpdater resumes 181 permanent failures across execution boundaries', () => {
+  const titleRows = Array.from({ length: 181 }, (_, index) => [
+    `https://ja.boardgamearena.com/gamepanel?game=${index}`,
+    '',
+    '',
+    'previous error',
+  ]);
+  const properties = new Map();
+  const fetchedUrls = [];
+  for (const [count, remaining] of [
+    [180, true],
+    [1, false],
+  ]) {
+    const { ClockDate, clock } = createClockDate();
+    const sandbox = createTitleSandbox({
+      titleRows,
+      properties,
+      DateConstructor: ClockDate,
+      responses: Array.from({ length: count }, () => ({
+        status: 500,
+        body: 'error',
+      })),
+    });
+    sandbox.Utilities.sleep = () => {
+      clock.nowMs += 1000;
+    };
+    const context = loadTitleUpdaterService(sandbox);
+    assert.equal(context.TitleUpdater.run(), remaining);
+    assert.equal(sandbox.fetchedUrls.length, count);
+    fetchedUrls.push(...sandbox.fetchedUrls);
+    titleRows.splice(
+      0,
+      titleRows.length,
+      ...sandbox.titlesSheet.writes[0].values,
+    );
+  }
+  assert.deepEqual(
+    fetchedUrls,
+    titleRows.map((row) => row[TITLE_URL_COLUMN]),
+  );
+  assert.ok(titleRows.every((row) => /HTTP 500/.test(row[TITLE_ERROR_COLUMN])));
+});
+
+test('TitleUpdater retry position survives successful rows and completes at the runtime boundary', () => {
+  const titleRows = Array.from({ length: 3 }, (_, index) => [
+    `https://ja.boardgamearena.com/gamepanel?game=${index}`,
+    '',
+    '',
+    'previous error',
+  ]);
+  const properties = new Map();
+  const fetchedUrls = [];
+  const results = [
+    { status: 200, body: titlePage('カタン') },
+    { status: 500, body: 'error' },
+    { status: 200, body: titlePage('カルカソンヌ') },
+  ];
+  for (const [index, response] of results.entries()) {
+    const { ClockDate, clock } = createClockDate();
+    const sandbox = createTitleSandbox({
+      titleRows,
+      properties,
+      DateConstructor: ClockDate,
+      responses: [response],
+    });
+    const context = loadTitleUpdaterService(sandbox);
+    sandbox.Utilities.sleep = () => {
+      clock.nowMs += context.UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS;
+    };
+    assert.equal(context.TitleUpdater.run(), index < results.length - 1);
+    fetchedUrls.push(...sandbox.fetchedUrls);
+    titleRows.splice(
+      0,
+      titleRows.length,
+      ...sandbox.titlesSheet.writes[0].values,
+    );
+  }
+  assert.deepEqual(
+    fetchedUrls,
+    titleRows.map((row) => row[TITLE_URL_COLUMN]),
+  );
+  assert.equal(titleRows[0][TITLE_NORMALIZED_COLUMN], 'カタン');
+  assert.match(titleRows[1][TITLE_ERROR_COLUMN], /HTTP 500/);
+  assert.equal(titleRows[2][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
+});
+
+test('TitleUpdater preserves retry position when the sheet write fails', () => {
+  const properties = new Map([['TITLE_RETRY_ROW', '1']]);
+  const titleRows = [
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=first',
+      '',
+      '',
+      'previous error',
+    ],
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=second',
+      '',
+      '',
+      'previous error',
+    ],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    properties,
+    responses: [{ status: 500, body: 'error' }],
+    failOnSetValues: true,
+  });
+  const context = loadTitleUpdaterService(sandbox);
+  assert.throws(() => context.TitleUpdater.run(), /setValues failed/);
+  assert.deepEqual(sandbox.fetchedUrls, [titleRows[1][TITLE_URL_COLUMN]]);
+  assert.equal(properties.get('TITLE_RETRY_ROW'), '1');
+  assert.deepEqual(sandbox.titlesSheet.writes, []);
+  assert.equal(titleRows[1][TITLE_ERROR_COLUMN], 'previous error');
 });
