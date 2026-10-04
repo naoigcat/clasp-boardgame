@@ -53,9 +53,10 @@ class GameUpdater {
   /**
    * Updates one batch of stale game rows and reports whether work remains.
    *
-   * Returns false when every linked row is still within the refresh window,
+   * Returns false when every eligible row is still within the refresh window,
    * signaling the coordinator to move to Titles. A missing Games tab returns
    * true after logging so a rename or deletion is not treated as completion.
+   * Invalid or duplicate row numbers are logged and excluded from the batch.
    */
   static run(): boolean {
     const sheet = findSheet(SHEET_NAMES.GAMES);
@@ -68,7 +69,16 @@ class GameUpdater {
       return true;
     }
 
-    const rows = GameUpdater.loadRows(sheet);
+    const loadedRows = GameUpdater.loadRows(sheet);
+    const rows = loadedRows.filter((row) => {
+      if (GameUpdater.hasUniqueRowNumber(row, loadedRows)) {
+        return true;
+      }
+      Logger.log(
+        `Skipping Games row number ${row.rowNumber}: invalid or duplicate row number; excluded from this update.`,
+      );
+      return false;
+    });
     // A single reference time prevents a long batch from making equivalent rows
     // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
@@ -136,7 +146,7 @@ class GameUpdater {
       )
       .getValues();
     const rows = linkValues.map((linkRow, index) => ({
-      rowNumber: rowNumbers[index][0],
+      rowNumber: GameUpdater.normalizeRowNumber(rowNumbers[index][0]),
       gameLink: linkRow[0],
       values: valueRows[index] as SpreadsheetCellRow,
     }));
@@ -147,9 +157,33 @@ class GameUpdater {
     return firstEmptyRowIndex === -1 ? rows : rows.slice(0, firstEmptyRowIndex);
   }
 
+  /** Accepts decimal row numbers stored as text without changing column A. */
+  private static normalizeRowNumber(
+    value: SpreadsheetCellValue,
+  ): SpreadsheetCellValue {
+    return typeof value === 'string' && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : value;
+  }
+
+  /** Invalid or ambiguous identities cannot be fetched or safely written. */
+  private static hasUniqueRowNumber(
+    row: GameSheetRow,
+    rows: readonly GameSheetRow[],
+  ): boolean {
+    return (
+      typeof row.rowNumber === 'number' &&
+      Number.isSafeInteger(row.rowNumber) &&
+      row.rowNumber >= SHEET_LAYOUT.FIRST_DATA_ROW &&
+      rows.filter((candidate) => candidate.rowNumber === row.rowNumber)
+        .length === 1
+    );
+  }
+
   /**
    * Resolves each write by its column-A row number after fetching metadata.
-   * Missing, duplicate, or changed identities are left untouched for a retry.
+   * Identities that disappear, duplicate, or change during fetching are left
+   * untouched for a retry. Pre-existing invalid identities are excluded by run.
    * Never trims physical rows: they may have moved or been added during fetches.
    */
   private static writeRows(
@@ -162,14 +196,7 @@ class GameUpdater {
       const matches = currentRows.filter(
         (candidate) => candidate.rowNumber === row.rowNumber,
       );
-      if (
-        typeof row.rowNumber !== 'number' ||
-        !Number.isSafeInteger(row.rowNumber) ||
-        row.rowNumber < SHEET_LAYOUT.FIRST_DATA_ROW ||
-        rows.filter((candidate) => candidate.rowNumber === row.rowNumber)
-          .length !== 1 ||
-        matches.length !== 1
-      ) {
+      if (!GameUpdater.hasUniqueRowNumber(row, rows) || matches.length !== 1) {
         Logger.log(
           `Skipping Games row number ${row.rowNumber}: missing or duplicate row number.`,
         );
@@ -179,9 +206,11 @@ class GameUpdater {
 
       const targetRow =
         SHEET_LAYOUT.FIRST_DATA_ROW + currentRows.indexOf(matches[0]);
-      const currentRowNumber = sheet
-        .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
-        .getValues()[0][0];
+      const currentRowNumber = GameUpdater.normalizeRowNumber(
+        sheet
+          .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
+          .getValues()[0][0],
+      );
       const currentLink = sheet
         .getRange(targetRow, SHEET_LAYOUT.GAMES_LINK_COLUMN, 1, 1)
         .getRichTextValues()[0][0];

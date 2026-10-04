@@ -1253,6 +1253,140 @@ test('GameUpdater skips duplicate numbers already present when the batch starts'
   assert.deepEqual(sheet.writes, []);
 });
 
+test('GameUpdater accepts decimal row numbers stored as text', () => {
+  const ids = ['2', '5', '6', '8', '9', '13'];
+  const rows = ids.map((id, index) => ({
+    ...createGameRow(index, `https://boardgamegeek.com/boardgame/${index + 1}`),
+    rowNumber: id,
+  }));
+  const sheet = createGamesSheet(rows);
+  const logs = [];
+  const context = loadGameUpdater({
+    Date,
+    Logger: { log: (message) => logs.push(message) },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+    },
+  });
+  let fetches = 0;
+  context.GameUpdater.fetchGameItem = () => {
+    fetches += 1;
+    return {};
+  };
+  context.GameUpdater.applyGameItem = (row, _item, _id, current) => {
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+  };
+  assert.equal(context.GameUpdater.run(), false);
+  assert.equal(fetches, ids.length);
+  assert.equal(sheet.writes.length, ids.length);
+  assert.deepEqual(
+    rows.map((row) => row.rowNumber),
+    ids,
+  );
+  assert.deepEqual(logs, []);
+});
+
+test('GameUpdater excludes permanent identity errors without fetching or blocking later batches', () => {
+  for (const fresh of [false, true]) {
+    // Numeric and text forms of the same ID must also count as duplicates.
+    const ids = ['', 'invalid', false, 1, 2.5, '9007199254740992', 5, '5', 13];
+    const rows = ids.map((id, index) => ({
+      ...createGameRow(
+        index,
+        `https://boardgamegeek.com/boardgame/${index + 1}`,
+      ),
+      rowNumber: id,
+    }));
+    if (fresh) {
+      rows.forEach((row) => {
+        row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date();
+      });
+    }
+    const sheet = createGamesSheet(rows);
+    const logs = [];
+    const context = loadGameUpdater({
+      Date,
+      Logger: { log: (message) => logs.push(message) },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+      },
+    });
+    let fetches = 0;
+    context.GameUpdater.fetchGameItem = () => {
+      fetches += 1;
+      return {};
+    };
+    context.GameUpdater.applyGameItem = (row, _item, _id, current) => {
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+    };
+    for (let batch = 0; batch < 3; batch += 1) {
+      assert.equal(context.GameUpdater.run(), false);
+      // Persist the valid row only, as the next trigger rereads the sheet.
+      rows[8].values = sheet.writes.at(-1).values[0];
+    }
+    assert.equal(fetches, fresh ? 0 : 1);
+    assert.equal(sheet.writes.length, 3);
+    assert.ok(sheet.writes.every((write) => write.a1NotationOrRow === 10));
+    assert.equal(logs.length, 8 * 3);
+    assert.ok(
+      logs.every((message) => message.includes('excluded from this update')),
+    );
+
+    // Repairing an excluded row makes it eligible in the next invocation.
+    rows[0].rowNumber = 20;
+    rows[0].values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(2020, 0, 1);
+    assert.equal(context.GameUpdater.run(), false);
+    assert.equal(fetches, fresh ? 1 : 2);
+    assert.ok(sheet.writes.some((write) => write.a1NotationOrRow === 2));
+
+    // Exercise the real coordinator through Titles and trigger cleanup.
+    let phase = 'games';
+    let titleRuns = 0;
+    let removedTriggers = 0;
+    context.ScriptPropertyStore = {
+      getOptionalValue: () => phase,
+      set: (_key, value) => {
+        phase = value;
+      },
+      remove: (key) => {
+        if (key === 'UPDATE_STEP') phase = undefined;
+      },
+    };
+    context.TitleUpdater = {
+      run: () => {
+        titleRuns += 1;
+        return false;
+      },
+    };
+    context.TriggerManager = {
+      removeAll: () => {
+        removedTriggers += 1;
+      },
+    };
+    loadScripts(context, [
+      {
+        path: 'src/services/UpdateCoordinator.ts',
+        exports: ['UpdateCoordinator'],
+      },
+    ]);
+    context.UpdateCoordinator.resumePendingPhase();
+    assert.equal(phase, 'titles');
+    context.UpdateCoordinator.resumePendingPhase();
+    assert.equal(phase, undefined);
+    assert.equal(titleRuns, 1);
+    assert.equal(removedTriggers, 1);
+
+    // A sheet containing only excluded rows must also finish immediately.
+    rows[0].rowNumber = '';
+    rows[8].rowNumber = 5;
+    sheet.writes.length = 0;
+    const previousFetches = fetches;
+    assert.equal(context.GameUpdater.run(), false);
+    assert.equal(fetches, previousFetches);
+    assert.deepEqual(sheet.writes, []);
+  }
+});
+
 test('GameUpdater checks the destination again immediately before each write', () => {
   const rows = [
     createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
