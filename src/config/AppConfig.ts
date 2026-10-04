@@ -6,7 +6,7 @@
  * these names as a contract with the spreadsheet UI.
  */
 const SHEET_NAMES = {
-  /** BoardGameGeek metadata keyed by rich-text links in column A. */
+  /** BoardGameGeek metadata identified by row numbers in column A and rich-text links in column B. */
   GAMES: 'Games',
   /** Current Board Game Arena catalog snapshot used as the Titles source. */
   RANKINGS: 'Rankings',

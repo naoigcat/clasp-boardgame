@@ -101,6 +101,7 @@ function createGameRow(index, url) {
   values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(2020, 0, index + 1);
 
   return {
+    rowNumber: index + 2,
     gameLink: {
       getText() {
         return `Game ${index}`;
@@ -116,8 +117,8 @@ function createGameRow(index, url) {
 /**
  * Keeps the double limited to managed rows so the batch boundary is unambiguous.
  *
- * `surplusRowCount` simulates abandoned B–AA cells below the first blank link.
- * `failOnSetValues` proves surplus clearing runs only after a successful rewrite.
+ * `surplusRowCount` simulates abandoned C–AB cells below the first blank link.
+ * `failOnSetValues` simulates a failed matched-row write.
  */
 function createGamesSheet(
   rows,
@@ -154,7 +155,9 @@ function createGamesSheet(
           // Surplus rows below the managed block have empty links; the updater
           // stops at the first blank, so only managed rows are returned as data.
           return Array.from({ length: numRows }, (_, index) => [
-            index < rows.length ? rows[index].gameLink : null,
+            index + a1NotationOrRow - 2 < rows.length
+              ? rows[index + a1NotationOrRow - 2].gameLink
+              : null,
           ]);
         },
         getValues() {
@@ -164,11 +167,14 @@ function createGamesSheet(
             numRows,
             numColumns,
           });
-          return Array.from({ length: numRows }, (_, index) =>
-            index < rows.length
-              ? rows[index].values.slice()
-              : Array(numColumns).fill('stale'),
-          );
+          return Array.from({ length: numRows }, (_, index) => {
+            const row = rows[index + a1NotationOrRow - 2];
+            return column === 1
+              ? [row?.rowNumber ?? '']
+              : row
+                ? row.values.slice()
+                : Array(numColumns).fill('stale');
+          });
         },
         setValues(values) {
           if (failOnSetValues) {
@@ -450,11 +456,15 @@ test('GameUpdater bounds Games sheet reads to getLastRow instead of open-ended A
 
   assert.equal(context.GameUpdater.run(), false);
 
-  assert.deepEqual(gamesSheet.rangeReads, [
+  assert.deepEqual(gamesSheet.rangeReads.slice(0, 3), [
     { row: 2, column: 1, numRows: 2, numColumns: 1 },
-    { row: 2, column: 2, numRows: 2, numColumns: 26 },
+    { row: 2, column: 2, numRows: 2, numColumns: 1 },
+    { row: 2, column: 3, numRows: 2, numColumns: 26 },
   ]);
-  assert.equal(gamesSheet.writes[0].values.length, 2);
+  assert.ok(
+    gamesSheet.rangeReads.every((range) => range.row + range.numRows - 1 <= 3),
+  );
+  assert.equal(gamesSheet.writes.flatMap((write) => write.values).length, 2);
   // A regression that reintroduced `$A$2:$A` would throw in createGamesSheet.
   reportedLastRow = 1;
   gamesSheet.rangeReads.length = 0;
@@ -463,13 +473,13 @@ test('GameUpdater bounds Games sheet reads to getLastRow instead of open-ended A
   assert.deepEqual(gamesSheet.rangeReads, []);
 });
 
-test('GameUpdater writes Games values then clears surplus B–AA rows', () => {
+test('GameUpdater writes matching Games rows without clearing surplus rows', () => {
   const rows = [
     createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
     createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
   ];
   // Two abandoned physical rows remain below the blank-link end marker after a
-  // shortened list; their B–AA cells must be trimmed after a successful write.
+  // shortened list; unmatched C–AB cells must remain untouched.
   const gamesSheet = createGamesSheet(rows, { surplusRowCount: 2 });
   const context = loadGameUpdater({
     Date,
@@ -494,26 +504,22 @@ test('GameUpdater writes Games values then clears surplus B–AA rows', () => {
 
   assert.equal(context.GameUpdater.run(), false);
 
-  // Write first so a failed setValues cannot wipe managed Games values, then
-  // trim only abandoned B–AA cells; column A is left alone for rich-text links.
+  // Only matched rows are written; surplus rows may belong to newly added games.
   assert.deepEqual(
     gamesSheet.operations.map((operation) => operation.type),
-    ['setValues', 'clearContent'],
+    ['setValues', 'setValues'],
   );
-  assert.deepEqual(gamesSheet.clears, [
-    { row: 4, column: 2, numRows: 2, numColumns: 26 },
-  ]);
-  assert.equal(gamesSheet.writes[0].values.length, 2);
-  assert.equal(gamesSheet.writes[0].column, 2);
+  assert.deepEqual(gamesSheet.clears, []);
+  assert.equal(gamesSheet.writes.flatMap((write) => write.values).length, 2);
+  assert.equal(gamesSheet.writes[0].column, 3);
 });
 
-test('GameUpdater clears surplus B–AA rows when every managed game is still fresh', () => {
+test('GameUpdater preserves surplus rows when every managed game is still fresh', () => {
   const rows = [
     createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
     createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
   ];
-  // Within the seven-day refresh window so countPendingRows is zero; surplus
-  // cleanup must still run after column A was shortened.
+  // Within the seven-day refresh window so no game needs a fetch.
   rows.forEach((row) => {
     row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(2024, 5, 14);
   });
@@ -543,26 +549,25 @@ test('GameUpdater clears surplus B–AA rows when every managed game is still fr
 
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 0);
-  // Fresh rows still rewrite current B–AA values, then trim abandoned cells so
-  // a pending-free early exit cannot skip surplus cleanup.
+  // Fresh rows clear formula inputs without touching any unmatched rows.
   assert.deepEqual(
     gamesSheet.operations.map((operation) => operation.type),
-    ['setValues', 'clearContent'],
+    ['setValues', 'setValues'],
   );
-  assert.deepEqual(gamesSheet.clears, [
-    { row: 4, column: 2, numRows: 2, numColumns: 26 },
-  ]);
-  assert.equal(gamesSheet.writes[0].values.length, 2);
-  assert.equal(gamesSheet.writes[0].column, 2);
+  assert.deepEqual(gamesSheet.clears, []);
+  assert.equal(gamesSheet.writes.flatMap((write) => write.values).length, 2);
+  assert.equal(gamesSheet.writes[0].column, 3);
   assert.deepEqual(
-    getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
+    getArrayFormulaInputs(
+      gamesSheet.writes.flatMap((write) => write.values)[0],
+    ),
     Array(5).fill(null),
   );
 });
 
-test('GameUpdater clears all B–AA data rows when the managed Games list is empty', () => {
-  // First blank link ends the managed block immediately, but abandoned B–AA
-  // cells can remain after every column-A link is deleted.
+test('GameUpdater preserves data rows when the managed Games list is empty', () => {
+  // First blank link ends the managed block immediately, but abandoned C–AB
+  // cells can remain after every column-B link is deleted.
   const gamesSheet = createGamesSheet([], { surplusRowCount: 3 });
   let fetchCount = 0;
   const context = loadGameUpdater({
@@ -588,19 +593,16 @@ test('GameUpdater clears all B–AA data rows when the managed Games list is emp
 
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 0);
-  // Empty managed lists skip setValues and clear B–AA from the first data row,
-  // matching Titles/Ratings empty-write cleanup without touching column A.
+  // No identity matches means no values may be written or cleared.
   assert.deepEqual(
     gamesSheet.operations.map((operation) => operation.type),
-    ['clearContent'],
+    [],
   );
-  assert.deepEqual(gamesSheet.clears, [
-    { row: 2, column: 2, numRows: 3, numColumns: 26 },
-  ]);
+  assert.deepEqual(gamesSheet.clears, []);
   assert.deepEqual(gamesSheet.writes, []);
 });
 
-test('GameUpdater leaves Games intact when setValues fails before surplus clear', () => {
+test('GameUpdater leaves Games intact when the first matched-row write fails', () => {
   const rows = [createGameRow(0, 'https://boardgamegeek.com/boardgame/1')];
   const gamesSheet = createGamesSheet(rows, {
     surplusRowCount: 2,
@@ -629,7 +631,7 @@ test('GameUpdater leaves Games intact when setValues fails before surplus clear'
 
   assert.throws(() => context.GameUpdater.run(), /setValues failed/);
 
-  // Clearing must not run after a write failure; otherwise managed B–AA values
+  // Clearing must not run after a write failure; otherwise managed C–AB values
   // would disappear even though BoardGameGeek cannot restore the prior snapshot.
   assert.deepEqual(gamesSheet.operations, []);
   assert.deepEqual(gamesSheet.clears, []);
@@ -673,7 +675,7 @@ test('GameUpdater clears formula inputs for refreshed and skipped Games rows', (
 
   assert.equal(context.GameUpdater.run(), true);
 
-  const writtenRows = gamesSheet.writes[0].values;
+  const writtenRows = gamesSheet.writes.flatMap((write) => write.values);
   // null clears the cell for ARRAYFORMULA; '' would leave a blocking blank.
   assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(null));
   assert.deepEqual(getArrayFormulaInputs(writtenRows[50]), Array(5).fill(null));
@@ -706,11 +708,15 @@ test('GameUpdater clears formula inputs when a game refresh fails', () => {
   assert.equal(context.GameUpdater.run(), false);
 
   assert.deepEqual(
-    getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
+    getArrayFormulaInputs(
+      gamesSheet.writes.flatMap((write) => write.values)[0],
+    ),
     Array(5).fill(null),
   );
   assert.ok(
-    gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
+    gamesSheet.writes.flatMap((write) => write.values)[0][
+      GAME_LAST_UPDATED_AT_COLUMN
+    ] instanceof Date,
   );
 });
 
@@ -745,14 +751,18 @@ test('GameUpdater retries failed rows after the short failure backoff, not the s
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 1);
   assert.match(
-    gamesSheet.writes[0].values[0][GAME_ERROR_MESSAGE_COLUMN],
+    gamesSheet.writes.flatMap((write) => write.values)[0][
+      GAME_ERROR_MESSAGE_COLUMN
+    ],
     /^HTTP 503$/,
   );
 
   // Persist the failure stamp the same way a later trigger rereads the sheet.
-  gamesSheet.writes[0].values.forEach((values, index) => {
-    rows[index].values = values;
-  });
+  gamesSheet.writes
+    .flatMap((write) => write.values)
+    .forEach((values, index) => {
+      rows[index].values = values;
+    });
   gamesSheet.writes.length = 0;
 
   // Still inside the one-day failure backoff: must not re-fetch yet.
@@ -809,9 +819,11 @@ test('GameUpdater keeps successful rows ineligible for the full seven-day refres
   assert.equal(context.GameUpdater.run(), false);
   assert.equal(fetchCount, 1);
 
-  gamesSheet.writes[0].values.forEach((values, index) => {
-    rows[index].values = values;
-  });
+  gamesSheet.writes
+    .flatMap((write) => write.values)
+    .forEach((values, index) => {
+      rows[index].values = values;
+    });
   gamesSheet.writes.length = 0;
 
   // One day is enough for a failed row to retry, but a success must still wait.
@@ -878,21 +890,27 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
 
   assert.equal(context.GameUpdater.run(), true);
   assert.deepEqual(
-    getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
+    getArrayFormulaInputs(
+      gamesSheet.writes.flatMap((write) => write.values)[50],
+    ),
     Array(5).fill(null),
   );
 
   // The sheet double reads from the source row objects, so persist the first
   // batch write before asserting that the next batch can move past failures.
-  gamesSheet.writes[0].values.forEach((values, index) => {
-    rows[index].values = values;
-  });
+  gamesSheet.writes
+    .flatMap((write) => write.values)
+    .forEach((values, index) => {
+      rows[index].values = values;
+    });
   gamesSheet.writes.length = 0;
   clock.nowMs = batchStartedAtMs;
 
   assert.equal(context.GameUpdater.run(), false);
   assert.deepEqual(
-    getArrayFormulaInputs(gamesSheet.writes[0].values[50]),
+    getArrayFormulaInputs(
+      gamesSheet.writes.flatMap((write) => write.values)[50],
+    ),
     Array(5).fill(null),
   );
 });
@@ -934,7 +952,9 @@ test('GameUpdater escapes formula-like recommendations and errors before setValu
 
   assert.equal(context.GameUpdater.run(), false);
 
-  const [writtenSuccess, writtenFailure] = gamesSheet.writes[0].values;
+  const [writtenSuccess, writtenFailure] = gamesSheet.writes.flatMap(
+    (write) => write.values,
+  );
   // Recommendation labels and error text are external; a leading apostrophe
   // keeps Sheets from executing them as formulas when the workbook is shared.
   assert.equal(
@@ -1013,7 +1033,7 @@ test('GameUpdater keeps prior player recommendations when applyGameItem fails mi
 
   assert.equal(context.GameUpdater.run(), false);
 
-  const written = gamesSheet.writes[0].values[0];
+  const written = gamesSheet.writes.flatMap((write) => write.values)[0];
   // Copy into a host-realm array: sheet doubles hold VM arrays from loadScripts.
   assert.deepEqual(
     Array.from(
@@ -1092,14 +1112,166 @@ test('GameUpdater throttles before raising a non-2xx BoardGameGeek response', ()
     context.BOARD_GAME_GEEK_CONFIG.REQUEST_DELAY_MILLISECONDS,
   ]);
   assert.match(
-    gamesSheet.writes[0].values[0][GAME_ERROR_MESSAGE_COLUMN],
+    gamesSheet.writes.flatMap((write) => write.values)[0][
+      GAME_ERROR_MESSAGE_COLUMN
+    ],
     /^HTTP 503$/,
   );
   assert.deepEqual(
-    getArrayFormulaInputs(gamesSheet.writes[0].values[0]),
+    getArrayFormulaInputs(
+      gamesSheet.writes.flatMap((write) => write.values)[0],
+    ),
     Array(5).fill(null),
   );
   assert.ok(
-    gamesSheet.writes[0].values[0][GAME_LAST_UPDATED_AT_COLUMN] instanceof Date,
+    gamesSheet.writes.flatMap((write) => write.values)[0][
+      GAME_LAST_UPDATED_AT_COLUMN
+    ] instanceof Date,
   );
+});
+
+test('GameUpdater matches row numbers after edits during metadata fetching', async (t) => {
+  const scenarios = [
+    {
+      name: 'sorting moves the update with its row number',
+      edit: (rows) => rows.reverse(),
+      expected: [
+        [2, 3],
+        [3, 2],
+      ],
+      pending: false,
+    },
+    {
+      name: 'inserting a game preserves the new row',
+      edit: (rows) =>
+        rows.unshift(createGameRow(8, 'https://boardgamegeek.com/boardgame/9')),
+      expected: [
+        [2, 3],
+        [3, 4],
+      ],
+      pending: false,
+    },
+    {
+      name: 'deleting a game never writes its values onto the next row',
+      edit: (rows) => rows.shift(),
+      expected: [[3, 2]],
+      pending: true,
+    },
+    {
+      name: 'duplicate row numbers skip both targets',
+      edit: (rows) => {
+        rows[1].rowNumber = rows[0].rowNumber;
+      },
+      expected: [],
+      pending: true,
+    },
+    {
+      name: 'blank row number is left untouched',
+      edit: (rows) => {
+        rows[0].rowNumber = '';
+      },
+      expected: [[3, 3]],
+      pending: true,
+    },
+    {
+      name: 'changed link with the same row number is left untouched',
+      edit: (rows) => {
+        rows[0].gameLink = createGameRow(
+          8,
+          'https://boardgamegeek.com/boardgame/9',
+        ).gameLink;
+      },
+      expected: [[3, 3]],
+      pending: true,
+    },
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, () => {
+      const rows = [
+        createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+        createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+      ];
+      const sheet = createGamesSheet(rows);
+      const context = loadGameUpdater({
+        Date,
+        Logger: { log() {} },
+        SpreadsheetApp: {
+          getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+        },
+      });
+      let edited = false;
+      context.GameUpdater.fetchGameItem = () => {
+        if (!edited) {
+          scenario.edit(rows);
+          edited = true;
+        }
+        return {};
+      };
+      context.GameUpdater.applyGameItem = (row, _item, _id, current) => {
+        row.values[GAME_BOARD_GAME_RANK_COLUMN] = row.rowNumber;
+        row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+      };
+      assert.equal(context.GameUpdater.run(), scenario.pending);
+      assert.deepEqual(
+        sheet.writes.map((write) => [
+          write.values[0][GAME_BOARD_GAME_RANK_COLUMN],
+          write.a1NotationOrRow,
+        ]),
+        scenario.expected,
+      );
+      assert.ok(
+        sheet.writes.every(
+          (write) =>
+            write.column === 3 &&
+            write.numRows === 1 &&
+            write.numColumns === 26,
+        ),
+      );
+      assert.deepEqual(sheet.clears, []);
+    });
+  }
+});
+
+test('GameUpdater skips duplicate numbers already present when the batch starts', () => {
+  const rows = [
+    createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+    createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+  ];
+  rows[1].rowNumber = rows[0].rowNumber;
+  const sheet = createGamesSheet(rows);
+  const context = loadGameUpdater({
+    Date,
+    Logger: { log() {} },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+    },
+  });
+  assert.equal(
+    context.GameUpdater.writeRows(sheet, context.GameUpdater.loadRows(sheet)),
+    true,
+  );
+  assert.deepEqual(sheet.writes, []);
+});
+
+test('GameUpdater checks the destination again immediately before each write', () => {
+  const rows = [
+    createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+    createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+  ];
+  const sheet = createGamesSheet(rows);
+  const getRange = sheet.getRange;
+  sheet.getRange = (...args) => {
+    const range = getRange(...args);
+    const setValues = range.setValues;
+    range.setValues = (values) => {
+      setValues(values);
+      rows.reverse();
+    };
+    return range;
+  };
+  const context = loadGameUpdater({ Date, Logger: { log() {} } });
+  const snapshot = context.GameUpdater.loadRows(sheet);
+  assert.equal(context.GameUpdater.writeRows(sheet, snapshot), true);
+  assert.equal(sheet.writes.length, 1);
+  assert.equal(sheet.writes[0].a1NotationOrRow, 2);
 });

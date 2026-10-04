@@ -1,14 +1,16 @@
 /**
- * A Games row with column A kept as rich text and columns B through AA kept as
+ * A Games row with column B kept as rich text and columns C through AB kept as
  * mutable cell values.
  *
  * Splitting the link from the value columns is required because Apps Script's
  * `getValues` / `setValues` APIs do not round-trip hyperlink formatting.
  */
 interface GameSheetRow {
-  /** Rich-text link in column A, or null when the sheet row is empty. */
+  /** Stable row number stored in column A, preserved when rows move. */
+  readonly rowNumber: SpreadsheetCellValue;
+  /** Rich-text link in column B, or null when the sheet row is empty. */
   readonly gameLink: GoogleAppsScript.Spreadsheet.RichTextValue | null;
-  /** Values from columns B through AA, in their original sheet order. */
+  /** Values from columns C through AB, in their original sheet order. */
   readonly values: SpreadsheetCellRow;
 }
 
@@ -71,11 +73,7 @@ class GameUpdater {
     // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
     if (GameUpdater.countPendingRows(rows, current) === 0) {
-      // Still flush surplus B–AA cleanup when every managed link is fresh so a
-      // shortened column-A list cannot leave orphaned metadata until the next
-      // stale refresh, including the empty-list case after all links are removed.
-      GameUpdater.writeRows(sheet, rows);
-      return false;
+      return GameUpdater.writeRows(sheet, rows);
     }
 
     const progress: GameBatchProgress = {
@@ -87,8 +85,8 @@ class GameUpdater {
         GameUpdater.updateRow(row, current, progress);
       });
 
-      GameUpdater.writeRows(sheet, rows);
-      return GameUpdater.countPendingRows(rows, current) > 0;
+      const skippedWrite = GameUpdater.writeRows(sheet, rows);
+      return skippedWrite || GameUpdater.countPendingRows(rows, current) > 0;
     } catch (error: unknown) {
       Logger.log(
         `Failed after processing ${progress.processedCount} games: ${getErrorMessage(error)}`,
@@ -113,6 +111,14 @@ class GameUpdater {
       return [];
     }
 
+    const rowNumbers = sheet
+      .getRange(
+        SHEET_LAYOUT.FIRST_DATA_ROW,
+        SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN,
+        dataRowCount,
+        1,
+      )
+      .getValues();
     const linkValues = sheet
       .getRange(
         SHEET_LAYOUT.FIRST_DATA_ROW,
@@ -130,6 +136,7 @@ class GameUpdater {
       )
       .getValues();
     const rows = linkValues.map((linkRow, index) => ({
+      rowNumber: rowNumbers[index][0],
       gameLink: linkRow[0],
       values: valueRows[index] as SpreadsheetCellRow,
     }));
@@ -141,19 +148,66 @@ class GameUpdater {
   }
 
   /**
-   * Prepares Games values and delegates snapshot persistence to the shared sheet
-   * gateway. Column A stays outside the payload so rich-text links survive.
+   * Resolves each write by its column-A row number after fetching metadata.
+   * Missing, duplicate, or changed identities are left untouched for a retry.
+   * Never trims physical rows: they may have moved or been added during fetches.
    */
   private static writeRows(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     rows: readonly GameSheetRow[],
-  ): void {
-    writeSheetSnapshot(
-      sheet,
-      rows.map((row) => GameUpdater.valuesForWrite(row)),
-      SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
-      SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
-    );
+  ): boolean {
+    const currentRows = GameUpdater.loadRows(sheet);
+    let skippedWrite = false;
+    rows.forEach((row) => {
+      const matches = currentRows.filter(
+        (candidate) => candidate.rowNumber === row.rowNumber,
+      );
+      if (
+        typeof row.rowNumber !== 'number' ||
+        !Number.isSafeInteger(row.rowNumber) ||
+        row.rowNumber < SHEET_LAYOUT.FIRST_DATA_ROW ||
+        rows.filter((candidate) => candidate.rowNumber === row.rowNumber)
+          .length !== 1 ||
+        matches.length !== 1
+      ) {
+        Logger.log(
+          `Skipping Games row number ${row.rowNumber}: missing or duplicate row number.`,
+        );
+        skippedWrite = true;
+        return;
+      }
+
+      const targetRow =
+        SHEET_LAYOUT.FIRST_DATA_ROW + currentRows.indexOf(matches[0]);
+      const currentRowNumber = sheet
+        .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
+        .getValues()[0][0];
+      const currentLink = sheet
+        .getRange(targetRow, SHEET_LAYOUT.GAMES_LINK_COLUMN, 1, 1)
+        .getRichTextValues()[0][0];
+      if (
+        currentRowNumber !== row.rowNumber ||
+        (currentLink?.getLinkUrl() ?? null) !==
+          (row.gameLink?.getLinkUrl() ?? null) ||
+        (currentLink?.getText() ?? '') !== (row.gameLink?.getText() ?? '')
+      ) {
+        Logger.log(
+          `Skipping Games row number ${row.rowNumber}: row identity changed.`,
+        );
+        skippedWrite = true;
+        return;
+      }
+
+      sheet
+        .getRange(
+          targetRow,
+          SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
+          1,
+          SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
+        )
+        .setValues(escapeSheetValues([GameUpdater.valuesForWrite(row)]));
+    });
+    return skippedWrite;
   }
 
   /**

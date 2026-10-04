@@ -7,16 +7,18 @@
 const SHEET_LAYOUT = {
   /** The header occupies the first row in every managed sheet. */
   FIRST_DATA_ROW: 2,
-  /** Column A holds the BoardGameGeek rich-text link for each Games row. */
-  GAMES_LINK_COLUMN: 1,
+  /** Column A stores a stable row number used to identify writes. */
+  GAMES_ROW_NUMBER_COLUMN: 1,
+  /** Column B holds the BoardGameGeek rich-text link for each Games row. */
+  GAMES_LINK_COLUMN: 2,
   /**
-   * First column written after a Games metadata refresh. Column A stays
+   * First column written after a Games metadata refresh. Columns A and B stay
    * untouched so the rich-text BoardGameGeek link is preserved.
    */
-  GAMES_WRITE_START_COLUMN: 2,
+  GAMES_WRITE_START_COLUMN: 3,
   /**
-   * Number of Games value columns from B through AA. Read and write use this
-   * width so column A is never part of the value range.
+   * Number of Games value columns from C through AB. Read and write use this
+   * width so columns A and B are never part of the value range.
    */
   GAMES_VALUE_COLUMN_COUNT: 26,
   /** First column of the Titles range. */
@@ -32,8 +34,8 @@ const SHEET_LAYOUT = {
 } as const;
 
 /**
- * Zero-based positions in a Games row after column A has been separated as a
- * rich-text link and columns B through AA have been loaded as cell values.
+ * Zero-based positions in a Games row after column B has been separated as a
+ * rich-text link and columns C through AB have been loaded as cell values.
  *
  * Derived columns are owned by spreadsheet array formulas. The updater clears
  * them after a successful refresh so those formulas recalculate from the new
@@ -43,43 +45,43 @@ const SHEET_LAYOUT = {
  * columns follow immediately so they stay aligned with the real sheet layout.
  */
 const GAME_VALUE_COLUMN = {
-  /** Column C: array-formula input that derives the year from the date in column B. */
+  /** Column D: array-formula input that derives the year from the date in column C. */
   DERIVED_TITLE: 1,
   /**
-   * Column F: array-formula input that derives the classification from the
-   * location in column E.
+   * Column G: array-formula input that derives the classification from the
+   * location in column F.
    */
   DERIVED_PLAYER_COUNT: 4,
   /**
-   * Column I: first recommendation column; offset 0 means two players and
-   * offset 8 (column Q) means ten players.
+   * Column J: first recommendation column; offset 0 means two players and
+   * offset 8 (column R) means ten players.
    */
   PLAYER_RECOMMENDATION_START: 7,
-  /** Column R: BoardGameGeek's overall board-game rank. */
+  /** Column S: BoardGameGeek's overall board-game rank. */
   BOARD_GAME_RANK: 16,
-  /** Column S: BoardGameGeek's Bayesian average rating. */
+  /** Column T: BoardGameGeek's Bayesian average rating. */
   BAYES_AVERAGE: 17,
-  /** Column T: BoardGameGeek's average complexity weight. */
+  /** Column U: BoardGameGeek's average complexity weight. */
   AVERAGE_WEIGHT: 18,
-  /** Column U: formatted minimum and maximum play time. */
+  /** Column V: formatted minimum and maximum play time. */
   PLAY_TIME: 19,
-  /** Column V: BoardGameGeek's publication year. */
+  /** Column W: BoardGameGeek's publication year. */
   PUBLICATION_YEAR: 20,
-  /** Column W: array-formula input that joins the row to Rankings data. */
+  /** Column X: array-formula input that joins the row to Rankings data. */
   DERIVED_RANKING: 21,
-  /** Column X: array-formula input that joins the row to Ratings data. */
+  /** Column Y: array-formula input that joins the row to Ratings data. */
   DERIVED_RATING: 22,
-  /** Column Y: array-formula input that looks up play counts from Per Game. */
+  /** Column Z: array-formula input that looks up play counts from Per Game. */
   DERIVED_TITLE_MATCH: 23,
   /**
-   * Column Z: timestamp of the last BoardGameGeek update attempt. Advanced on
+   * Column AA: timestamp of the last BoardGameGeek update attempt. Advanced on
    * failure as well as success so permanent errors rotate out of the
    * oldest-first queue; failed rows become eligible again after the short
    * failure backoff rather than the full success refresh interval.
    */
   LAST_UPDATED_AT: 24,
   /**
-   * Column AA: latest fetch or parsing error shown beside the game for
+   * Column AB: latest fetch or parsing error shown beside the game for
    * troubleshooting.
    */
   ERROR_MESSAGE: 25,

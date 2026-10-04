@@ -88,11 +88,10 @@ function writeSheetSnapshot(
 /**
  * Clears only rows below a just-written data block.
  *
- * Titles, Rankings, Ratings, and Games write first, then trim abandoned physical
+ * Titles, Rankings, and Ratings write first, then trim abandoned physical
  * rows. Clearing after setValues avoids a window where a failed rewrite would
  * leave a header-only sheet and erase data that cannot be restored until the
- * next successful fetch. Games passes a start column of B so surplus cleanup
- * never touches BoardGameGeek rich-text links in column A.
+ * next successful fetch.
  */
 function clearSurplusSheetDataRows(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
