@@ -14,6 +14,7 @@ overrides:
   proxy-addr: 2.0.8
   qs: 6.16.0
   uuid: 11.1.1
+  zod: 4.6.6
 
 importers:
   .:
@@ -2212,10 +2213,10 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.25.76:
+  zod@4.6.6:
     resolution:
       {
-        integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==,
+        integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==,
       }
 
 snapshots:
@@ -2271,7 +2272,7 @@ snapshots:
       server-destroy: 1.0.1
       split-lines: 3.0.0
       strip-bom: 5.0.0
-      zod: 3.25.76
+      zod: 4.6.6
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - '@types/node'
@@ -2452,7 +2453,7 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
+      zod: 4.6.6
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
@@ -3499,6 +3500,6 @@ snapshots:
 
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
-      zod: 3.25.76
+      zod: 4.6.6
 
-  zod@3.25.76: {}
+  zod@4.6.6: {}
