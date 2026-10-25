@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  hono: 4.13.11
   ip-address: 10.7.4
   fast-uri: 3.1.9
   body-parser: 2.4.0
@@ -1215,10 +1216,10 @@ packages:
       }
     engines: { node: '>= 0.4' }
 
-  hono@4.13.5:
+  hono@4.13.11:
     resolution:
       {
-        integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==,
+        integrity: sha512-/SMX/RQNJn7oNmFwH6DtwDqcrzZU2otm1FD6OJe2cWF6cfy/F8hq0XVBv7xW3FTJshRQwuBnXHDq2kNsdZnshg==,
       }
     engines: { node: '>=16.9.0' }
 
@@ -2277,7 +2278,7 @@ snapshots:
 
   '@hono/node-server@2.1.1(hono@4.13.5)':
     dependencies:
-      hono: 4.13.5
+      hono: 4.13.11
 
   '@inquirer/ansi@1.0.2': {}
 
@@ -2445,7 +2446,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1(supports-color@7.2.0)
       express-rate-limit: 8.7.0(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-      hono: 4.13.5
+      hono: 4.13.11
       jose: 6.2.10
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -2948,7 +2949,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.13.5: {}
+  hono@4.13.11: {}
 
   hosted-git-info@7.0.2:
     dependencies:
