@@ -180,11 +180,13 @@ class RankingUpdater {
     tagIds: readonly number[],
     tagNames: Readonly<Record<number, string>>,
   ): string[] {
-    const ignoredTagIds = new Set<number>(
-      BOARD_GAME_ARENA_CONFIG.IGNORED_TAG_IDS,
-    );
     return tagIds
-      .filter((tagId) => !ignoredTagIds.has(tagId))
+      .filter(
+        (tagId) =>
+          !BOARD_GAME_ARENA_CONFIG.IGNORED_TAG_IDS.some(
+            (ignoredTagId) => ignoredTagId === tagId,
+          ),
+      )
       .map((tagId) => tagNames[tagId])
       .filter((tagName): tagName is string => tagName !== undefined);
   }
