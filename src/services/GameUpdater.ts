@@ -211,35 +211,50 @@ class GameUpdater {
       }
 
       const targetRow = SHEET_LAYOUT.FIRST_DATA_ROW + position;
-      const currentRowNumber = GameUpdater.normalizeRowNumber(
-        sheet
-          .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
-          .getValues()[0][0],
-      );
-      const currentLink = sheet
-        .getRange(targetRow, SHEET_LAYOUT.GAMES_LINK_COLUMN, 1, 1)
-        .getRichTextValues()[0][0];
-      if (
-        currentRowNumber !== row.rowNumber ||
-        (currentLink?.getLinkUrl() ?? null) !==
-          (row.gameLink?.getLinkUrl() ?? null) ||
-        (currentLink?.getText() ?? '') !== (row.gameLink?.getText() ?? '')
-      ) {
-        Logger.log(
-          `Skipping Games row number ${row.rowNumber}: row identity changed.`,
-        );
-        skippedWrite = true;
-        return;
-      }
-
-      sheet
-        .getRange(
-          targetRow,
-          SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
-          1,
+      const values = GameUpdater.valuesForWrite(row);
+      // Never write input columns: users can edit them while HTTP requests run.
+      const ranges = [
+        [GAME_VALUE_COLUMN.DERIVED_TITLE, GAME_VALUE_COLUMN.DERIVED_TITLE + 1],
+        [
+          GAME_VALUE_COLUMN.DERIVED_PLAYER_COUNT,
+          GAME_VALUE_COLUMN.DERIVED_PLAYER_COUNT + 1,
+        ],
+        [
+          GAME_VALUE_COLUMN.PLAYER_RECOMMENDATION_START,
           SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
-        )
-        .setValues(escapeSheetValues([GameUpdater.valuesForWrite(row)]));
+        ],
+      ];
+      for (const [start, end] of ranges) {
+        const currentRowNumber = GameUpdater.normalizeRowNumber(
+          sheet
+            .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
+            .getValues()[0][0],
+        );
+        const currentLink = sheet
+          .getRange(targetRow, SHEET_LAYOUT.GAMES_LINK_COLUMN, 1, 1)
+          .getRichTextValues()[0][0];
+        if (
+          currentRowNumber !== row.rowNumber ||
+          (currentLink?.getLinkUrl() ?? null) !==
+            (row.gameLink?.getLinkUrl() ?? null) ||
+          (currentLink?.getText() ?? '') !== (row.gameLink?.getText() ?? '')
+        ) {
+          Logger.log(
+            `Skipping Games row number ${row.rowNumber}: row identity changed.`,
+          );
+          skippedWrite = true;
+          return;
+        }
+
+        sheet
+          .getRange(
+            targetRow,
+            SHEET_LAYOUT.GAMES_WRITE_START_COLUMN + start,
+            1,
+            end - start,
+          )
+          .setValues(escapeSheetValues([values.slice(start, end)]));
+      }
     });
     return skippedWrite;
   }
