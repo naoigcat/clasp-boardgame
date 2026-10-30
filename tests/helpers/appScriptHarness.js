@@ -12,6 +12,8 @@ const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const compiledSources = new Map();
+
 /**
  * Compiles one non-module Apps Script source file and exposes selected names
  * to a test sandbox, mirroring Apps Script's global execution model. TypeScript
@@ -20,6 +22,12 @@ const vm = require('node:vm');
  */
 function compileSource(relativePath, exportNames) {
   const sourcePath = path.join(__dirname, '..', '..', relativePath);
+  const exports = exportNames
+    .map((name) => `globalThis.${name} = ${name};`)
+    .join('\n');
+  if (compiledSources.has(sourcePath)) {
+    return `${compiledSources.get(sourcePath)}\n${exports}`;
+  }
   const outputDirectory = fs.mkdtempSync(
     path.join(os.tmpdir(), 'clasp-boardgame-ts-'),
   );
@@ -54,10 +62,7 @@ function compileSource(relativePath, exportNames) {
   // Keep top-level Apps Script declarations accessible as VM global properties.
   // ES5 transpilation did this implicitly; ES2015 preserves const/let instead.
   output = output.replace(/^(const|let)\s+/gm, 'var ');
-  const exports = exportNames
-    .map((name) => `globalThis.${name} = ${name};`)
-    .join('\n');
-
+  compiledSources.set(sourcePath, output);
   return `${output}\n${exports}`;
 }
 
@@ -86,6 +91,28 @@ function loadScripts(sandbox, scripts) {
   }
 
   return context;
+}
+
+/**
+ * Supplies a Date stand-in whose `now()` advances under test control.
+ *
+ * Prototype sharing keeps host-created Date values passing `instanceof Date`
+ * checks inside the VM while runtime-budget helpers read the fake clock.
+ */
+function createClockDate(initialMs = 0) {
+  const clock = { nowMs: initialMs };
+  function ClockDate(...args) {
+    if (args.length === 0) {
+      return new Date(clock.nowMs);
+    }
+
+    return new Date(...args);
+  }
+  ClockDate.now = () => clock.nowMs;
+  ClockDate.parse = Date.parse;
+  ClockDate.UTC = Date.UTC;
+  ClockDate.prototype = Date.prototype;
+  return { ClockDate, clock };
 }
 
 /**
@@ -235,6 +262,7 @@ function getCalls(sheet, type) {
 }
 
 module.exports = {
+  createClockDate,
   createSandbox,
   createSheet,
   getCalls,

@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const { loadScripts } = require('./helpers/appScriptHarness');
+const { createClockDate, loadScripts } = require('./helpers/appScriptHarness');
 
 /** Titles sheet column indexes mirrored from SheetSchema for assertions. */
 const TITLE_URL_COLUMN = 0;
@@ -44,28 +44,6 @@ function loadTitleUpdaterService(sandbox) {
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/services/TitleUpdater.ts', exports: ['TitleUpdater'] },
   ]);
-}
-
-/**
- * Supplies a Date stand-in whose `now()` advances under test control.
- *
- * Prototype sharing keeps host-created Date values passing `instanceof Date`
- * checks inside the VM while runtime-budget helpers read the fake clock.
- */
-function createClockDate(initialMs = 0) {
-  const clock = { nowMs: initialMs };
-  function ClockDate(...args) {
-    if (args.length === 0) {
-      return new Date(clock.nowMs);
-    }
-
-    return new Date(...args);
-  }
-  ClockDate.now = () => clock.nowMs;
-  ClockDate.parse = Date.parse;
-  ClockDate.UTC = Date.UTC;
-  ClockDate.prototype = Date.prototype;
-  return { ClockDate, clock };
 }
 
 /**

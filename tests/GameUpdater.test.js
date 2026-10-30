@@ -10,7 +10,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadScripts } = require('./helpers/appScriptHarness');
+const { createClockDate, loadScripts } = require('./helpers/appScriptHarness');
 
 /** Zero-based Games value columns owned by spreadsheet array formulas. */
 const GAME_ARRAY_FORMULA_INPUT_COLUMNS = [1, 4, 21, 22, 23];
@@ -313,28 +313,6 @@ function createGameItemWithTenAndElevenPlayerRecommendations() {
       yearpublished: createXmlElement({ attributes: { value: '2020' } }),
     },
   });
-}
-
-/**
- * Supplies a Date stand-in whose `now()` advances under test control.
- *
- * Prototype sharing keeps host-created Date values passing `instanceof Date`
- * checks inside the VM while runtime-budget helpers read the fake clock.
- */
-function createClockDate(initialMs = 0) {
-  const clock = { nowMs: initialMs };
-  function ClockDate(...args) {
-    if (args.length === 0) {
-      return new Date(clock.nowMs);
-    }
-
-    return new Date(...args);
-  }
-  ClockDate.now = () => clock.nowMs;
-  ClockDate.parse = Date.parse;
-  ClockDate.UTC = Date.UTC;
-  ClockDate.prototype = Date.prototype;
-  return { ClockDate, clock };
 }
 
 /**
