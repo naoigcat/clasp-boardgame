@@ -70,8 +70,9 @@ class GameUpdater {
     }
 
     const loadedRows = GameUpdater.loadRows(sheet);
+    const rowPositions = GameUpdater.indexRowNumbers(loadedRows);
     const rows = loadedRows.filter((row) => {
-      if (GameUpdater.hasUniqueRowNumber(row, loadedRows)) {
+      if (rowPositions.get(row.rowNumber) != null) {
         return true;
       }
       Logger.log(
@@ -82,7 +83,7 @@ class GameUpdater {
     // A single reference time prevents a long batch from making equivalent rows
     // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
-    if (GameUpdater.countPendingRows(rows, current) === 0) {
+    if (!GameUpdater.hasPendingRows(rows, current)) {
       return GameUpdater.writeRows(sheet, rows);
     }
 
@@ -96,7 +97,7 @@ class GameUpdater {
       });
 
       const skippedWrite = GameUpdater.writeRows(sheet, rows);
-      return skippedWrite || GameUpdater.countPendingRows(rows, current) > 0;
+      return skippedWrite || GameUpdater.hasPendingRows(rows, current);
     } catch (error: unknown) {
       Logger.log(
         `Failed after processing ${progress.processedCount} games: ${getErrorMessage(error)}`,
@@ -166,18 +167,22 @@ class GameUpdater {
       : value;
   }
 
-  /** Invalid or ambiguous identities cannot be fetched or safely written. */
-  private static hasUniqueRowNumber(
-    row: GameSheetRow,
+  /** Maps valid row numbers to positions; null marks every duplicate identity. */
+  private static indexRowNumbers(
     rows: readonly GameSheetRow[],
-  ): boolean {
-    return (
-      typeof row.rowNumber === 'number' &&
-      Number.isSafeInteger(row.rowNumber) &&
-      row.rowNumber >= SHEET_LAYOUT.FIRST_DATA_ROW &&
-      rows.filter((candidate) => candidate.rowNumber === row.rowNumber)
-        .length === 1
-    );
+  ): Map<SpreadsheetCellValue, number | null> {
+    const positions = new Map<SpreadsheetCellValue, number | null>();
+    rows.forEach((row, index) => {
+      const number = row.rowNumber;
+      if (
+        typeof number === 'number' &&
+        Number.isSafeInteger(number) &&
+        number >= SHEET_LAYOUT.FIRST_DATA_ROW
+      ) {
+        positions.set(number, positions.has(number) ? null : index);
+      }
+    });
+    return positions;
   }
 
   /**
@@ -190,13 +195,14 @@ class GameUpdater {
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     rows: readonly GameSheetRow[],
   ): boolean {
-    const currentRows = GameUpdater.loadRows(sheet);
+    const sourcePositions = GameUpdater.indexRowNumbers(rows);
+    const currentPositions = GameUpdater.indexRowNumbers(
+      GameUpdater.loadRows(sheet),
+    );
     let skippedWrite = false;
     rows.forEach((row) => {
-      const matches = currentRows.filter(
-        (candidate) => candidate.rowNumber === row.rowNumber,
-      );
-      if (!GameUpdater.hasUniqueRowNumber(row, rows) || matches.length !== 1) {
+      const position = currentPositions.get(row.rowNumber);
+      if (sourcePositions.get(row.rowNumber) == null || position == null) {
         Logger.log(
           `Skipping Games row number ${row.rowNumber}: missing or duplicate row number.`,
         );
@@ -204,8 +210,7 @@ class GameUpdater {
         return;
       }
 
-      const targetRow =
-        SHEET_LAYOUT.FIRST_DATA_ROW + currentRows.indexOf(matches[0]);
+      const targetRow = SHEET_LAYOUT.FIRST_DATA_ROW + position;
       const currentRowNumber = GameUpdater.normalizeRowNumber(
         sheet
           .getRange(targetRow, SHEET_LAYOUT.GAMES_ROW_NUMBER_COLUMN, 1, 1)
@@ -256,14 +261,14 @@ class GameUpdater {
   }
 
   /**
-   * Counts rows that have a source URL and are missing or past their refresh
+   * Reports whether any row has a source URL and is missing or past its refresh
    * timestamp.
    */
-  private static countPendingRows(
+  private static hasPendingRows(
     rows: readonly GameSheetRow[],
     current: Date,
-  ): number {
-    return rows.filter((row) => GameUpdater.needsRefresh(row, current)).length;
+  ): boolean {
+    return rows.some((row) => GameUpdater.needsRefresh(row, current));
   }
 
   /**
@@ -332,8 +337,7 @@ class GameUpdater {
   }
 
   /**
-   * Refreshes one eligible row and clears its dependent formula inputs after a
-   * successful metadata update.
+   * Refreshes one eligible row; formula inputs are cleared when writing.
    */
   private static updateRow(
     row: GameSheetRow,
@@ -357,26 +361,11 @@ class GameUpdater {
       const gameReference = GameUpdater.parseGameReference(gameUrl);
       const gameItem = GameUpdater.fetchGameItem(gameReference);
       GameUpdater.applyGameItem(row, gameItem, gameReference.id, current);
-      GameUpdater.clearArrayFormulaInputs(row);
     } catch (error: unknown) {
       // Row-level failures must not abort the batch; the error is recorded and
       // the next eligible game continues in the same invocation.
       GameUpdater.recordFailure(row, gameUrl, error, current);
     }
-  }
-
-  /**
-   * Clears values owned by array formulas after a successful metadata refresh.
-   *
-   * Uses null rather than an empty string so Apps Script `setValues` truly
-   * blanks the cell; empty strings block ARRAYFORMULA from re-expanding into
-   * the cleared cells. `valuesForWrite` applies the same nulling for failed
-   * and skipped rows so a refresh error cannot leave blocking blanks.
-   */
-  private static clearArrayFormulaInputs(row: GameSheetRow): void {
-    GAME_ARRAY_FORMULA_INPUT_COLUMNS.forEach((column) => {
-      row.values[column] = null;
-    });
   }
 
   /**

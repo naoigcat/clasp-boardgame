@@ -1387,3 +1387,14 @@ test('GameUpdater checks the destination again immediately before each write', (
   assert.equal(sheet.writes.length, 1);
   assert.equal(sheet.writes[0].a1NotationOrRow, 2);
 });
+
+test('GameUpdater keeps triplicate identities ambiguous without losing position zero', () => {
+  const context = loadGameUpdater({});
+  const rows = [2, 3, 3, 3, 4].map((rowNumber) => ({ rowNumber }));
+  const positions = context.GameUpdater.indexRowNumbers(rows);
+
+  assert.equal(positions.get(2), 0);
+  assert.equal(positions.get(3), null);
+  assert.equal(positions.get(4), 4);
+  assert.equal(positions.has(5), false);
+});
