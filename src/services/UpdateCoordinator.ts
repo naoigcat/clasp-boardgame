@@ -86,42 +86,25 @@ class UpdateCoordinator {
     );
 
     if (nextStep === UPDATE_QUEUE_CONFIG.GAMES_STEP) {
-      UpdateCoordinator.resumeGamesPhase();
+      if (!GameUpdater.run()) {
+        ScriptPropertyStore.set(
+          UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY,
+          UPDATE_QUEUE_CONFIG.TITLES_STEP,
+        );
+      }
       return;
     }
 
     if (nextStep === UPDATE_QUEUE_CONFIG.TITLES_STEP) {
-      UpdateCoordinator.resumeTitlesPhase();
+      if (!TitleUpdater.run()) {
+        UpdateCoordinator.finishUpdate();
+      }
       return;
     }
 
     // A missing or obsolete state must not leave an orphaned trigger running
     // forever after properties have been edited or a deployment has changed.
     UpdateCoordinator.finishUpdate();
-  }
-
-  /**
-   * Continues BoardGameGeek batches and switches to titles when they finish.
-   *
-   * `GameUpdater.run` returns true while stale rows remain so the same phase
-   * key is reused. Switching only after false avoids starting Titles early.
-   */
-  private static resumeGamesPhase(): void {
-    if (!GameUpdater.run()) {
-      ScriptPropertyStore.set(
-        UPDATE_QUEUE_CONFIG.STEP_PROPERTY_KEY,
-        UPDATE_QUEUE_CONFIG.TITLES_STEP,
-      );
-    }
-  }
-
-  /**
-   * Continues title batches and removes queue state after the final batch.
-   */
-  private static resumeTitlesPhase(): void {
-    if (!TitleUpdater.run()) {
-      UpdateCoordinator.finishUpdate();
-    }
   }
 
   /**

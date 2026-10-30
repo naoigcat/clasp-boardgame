@@ -42,9 +42,8 @@ class TitleUpdater {
     }
 
     const rows = TitleUpdater.loadRows(titlesSheet, rankingsSheet);
-    // countPendingRows is the incomplete gate so the early exit and the final
-    // queue-alive decision share one definition of "still needs a title".
-    if (TitleUpdater.countPendingRows(rows) === 0) {
+    const pendingRows = rows.filter(TitleUpdater.needsNormalization);
+    if (pendingRows.length === 0) {
       // Still compact blank URL slots when every title is already normalized so
       // mid-sheet empty rows do not linger until the next pending URL appears.
       writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
@@ -53,9 +52,6 @@ class TitleUpdater {
 
     // Rows that already failed stay eligible for retry, but unattempted rows
     // must advance first so a permanently broken head cannot stall the queue.
-    const pendingRows = rows.filter((row) =>
-      TitleUpdater.needsNormalization(row),
-    );
     const preferredRows = pendingRows.filter(
       (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
     );
@@ -106,18 +102,8 @@ class TitleUpdater {
       return stoppedForRuntime;
     }
 
-    if (
-      rows.some(
-        (row) =>
-          TitleUpdater.needsNormalization(row) &&
-          !row[TITLE_COLUMN.ERROR_MESSAGE],
-      )
-    ) {
-      return true;
-    }
-
-    // Keep the queue alive so the next invocation can run the failure-retry pass.
-    return TitleUpdater.countPendingRows(rows) > 0;
+    // A later invocation retries failures once all unattempted rows are done.
+    return rows.some(TitleUpdater.needsNormalization);
   }
 
   /**
@@ -180,13 +166,6 @@ class TitleUpdater {
     }
 
     return rows;
-  }
-
-  /**
-   * Counts rows that have a source URL but no canonical title yet.
-   */
-  private static countPendingRows(rows: readonly TitleSheetRow[]): number {
-    return rows.filter((row) => TitleUpdater.needsNormalization(row)).length;
   }
 
   /**
