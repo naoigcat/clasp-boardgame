@@ -178,23 +178,13 @@ class RatingUpdater {
         return;
       }
 
-      const rating = RatingUpdater.extractRating(card);
-      const interests = ['have', 'favorite', 'played', 'watching'].map(
-        (interest) => {
-          const match = card.match(
-            new RegExp(`class="friend-interest ${interest} (on|off)"`),
-          );
-          if (!match) {
-            throw new Error(
-              'Bodoge ratings page contained cards without extractable interests',
-            );
-          }
-          return match[1] === 'on';
-        },
-      );
+      const rating = RatingUpdater.extractRating(card) ?? '';
+
+      const interests = RatingUpdater.extractInterests(card);
       const [have, favorite, played, watching] = interests;
       // "0" is Bodoge's unrated/privacy-hidden marker, not a score.
-      if (rating === null || rating === '0') {
+      const isUnrated = rating === '' || rating === '0';
+      if (isUnrated) {
         hasUnratedCards = true;
         if (!interests.some(Boolean)) {
           return;
@@ -205,7 +195,7 @@ class RatingUpdater {
       RatingUpdater.expandTitleAliases(sourceTitle).forEach((title) => {
         rows.push([
           title,
-          rating === null || rating === '0' ? '' : rating,
+          isUnrated ? '' : rating,
           have,
           favorite,
           played,
@@ -291,6 +281,21 @@ class RatingUpdater {
       return null;
     }
     return rating;
+  }
+
+  /** Reads all registration flags, rejecting partial or unrecognized cards. */
+  private static extractInterests(cardHtml: string): boolean[] {
+    return ['have', 'favorite', 'played', 'watching'].map((interest) => {
+      const match = cardHtml.match(
+        new RegExp(`class="friend-interest ${interest} (on|off)"`),
+      );
+      if (!match) {
+        throw new Error(
+          'Bodoge ratings page contained cards without extractable interests',
+        );
+      }
+      return match[1] === 'on';
+    });
   }
 
   /**
