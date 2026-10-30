@@ -41,19 +41,7 @@ function clearSheetDataRows(
   columnCount: number,
   startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
 ): void {
-  const dataRowCount = getDataRowCount(sheet);
-  if (dataRowCount <= 0) {
-    return;
-  }
-
-  sheet
-    .getRange(
-      SHEET_LAYOUT.FIRST_DATA_ROW,
-      startColumn,
-      dataRowCount,
-      columnCount,
-    )
-    .clearContent();
+  clearSurplusSheetDataRows(sheet, 0, columnCount, startColumn);
 }
 
 /**

@@ -6,19 +6,6 @@
  */
 class HttpClient {
   /**
-   * Sends one request through the shared Apps Script error-handling boundary.
-   *
-   * Callers need response codes to decide whether an external snapshot is safe
-   * to publish, so every request must keep HTTP exceptions muted consistently.
-   */
-  private static fetch(
-    url: string,
-    options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
-  ): GoogleAppsScript.URL_Fetch.HTTPResponse {
-    return UrlFetchApp.fetch(url, { ...options, muteHttpExceptions: true });
-  }
-
-  /**
    * Fetches a URL with the supplied Apps Script request options.
    *
    * Always mutes HTTP exceptions so callers can inspect response codes and apply
@@ -29,7 +16,7 @@ class HttpClient {
     url: string,
     options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {},
   ): GoogleAppsScript.URL_Fetch.HTTPResponse {
-    return HttpClient.fetch(url, options);
+    return UrlFetchApp.fetch(url, { ...options, muteHttpExceptions: true });
   }
 
   /**
@@ -72,7 +59,7 @@ class HttpClient {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    return HttpClient.fetch(url, {
+    return HttpClient.get(url, {
       ...options,
       headers,
     });
