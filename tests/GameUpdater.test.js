@@ -1835,3 +1835,51 @@ for (const scenario of [
     );
   });
 }
+
+test('GameUpdater reads full metadata only at batch start and completion', () => {
+  for (const fresh of [true, false]) {
+    const { ClockDate, clock } = createClockDate(Date.UTC(2026, 0, 1));
+    const rows = Array.from({ length: 100 }, (_, index) => {
+      const row = createGameRow(
+        index,
+        `https://boardgamegeek.com/boardgame/${index + 1}`,
+      );
+      if (fresh)
+        row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(clock.nowMs);
+      return row;
+    });
+    const sheet = createGamesSheet(rows);
+    const context = loadGameUpdater({
+      Date: ClockDate,
+      Logger: { log() {} },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+      },
+    });
+    let fetches = 0;
+    context.GameUpdater.fetchGameItem = () => {
+      fetches++;
+      return {};
+    };
+    context.GameUpdater.applyGameItem = (row, _item, _id, now) => {
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = now;
+    };
+    assert.equal(context.GameUpdater.run(), false);
+    assert.equal(fetches, fresh ? 0 : rows.length);
+    const metadataReads = sheet.rangeReads.filter(
+      (range) => range.column === 3,
+    );
+    assert.equal(metadataReads.length, 2);
+    assert.ok(
+      metadataReads.every(
+        (range) => range.numRows === rows.length && range.numColumns === 26,
+      ),
+    );
+    assert.equal(sheet.writes.length, rows.length * 3);
+    assert.ok(
+      rows.every((row) =>
+        getArrayFormulaInputs(row.values).every((value) => value === null),
+      ),
+    );
+  }
+});

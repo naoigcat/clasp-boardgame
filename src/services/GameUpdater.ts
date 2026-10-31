@@ -167,6 +167,30 @@ class GameUpdater {
       return [];
     }
 
+    const identities = GameUpdater.loadRowIdentities(sheet, dataRowCount);
+    const valueRows = sheet
+      .getRange(
+        SHEET_LAYOUT.FIRST_DATA_ROW,
+        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
+        dataRowCount,
+        SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
+      )
+      .getValues();
+    return identities.map((identity, index) => ({
+      ...identity,
+      values: valueRows[index] as SpreadsheetCellRow,
+    }));
+  }
+
+  /** Re-read identities after fetches without copying every game's metadata. */
+  private static loadRowIdentities(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    dataRowCount: number,
+  ): Pick<GameSheetRow, 'rowNumber' | 'gameLink'>[] {
+    if (dataRowCount <= 0) {
+      return [];
+    }
+
     const rowNumbers = sheet
       .getRange(
         SHEET_LAYOUT.FIRST_DATA_ROW,
@@ -183,18 +207,9 @@ class GameUpdater {
         1,
       )
       .getRichTextValues();
-    const valueRows = sheet
-      .getRange(
-        SHEET_LAYOUT.FIRST_DATA_ROW,
-        SHEET_LAYOUT.GAMES_WRITE_START_COLUMN,
-        dataRowCount,
-        SHEET_LAYOUT.GAMES_VALUE_COLUMN_COUNT,
-      )
-      .getValues();
     const rows = linkValues.map((linkRow, index) => ({
       rowNumber: GameUpdater.normalizeRowNumber(rowNumbers[index][0]),
       gameLink: linkRow[0],
-      values: valueRows[index] as SpreadsheetCellRow,
     }));
     const firstEmptyRowIndex = rows.findIndex(
       (row) => row.gameLink === null || row.gameLink.getText().length === 0,
@@ -214,7 +229,7 @@ class GameUpdater {
 
   /** Maps valid row numbers to positions; null marks every duplicate identity. */
   private static indexRowNumbers(
-    rows: readonly GameSheetRow[],
+    rows: readonly Pick<GameSheetRow, 'rowNumber'>[],
   ): Map<SpreadsheetCellValue, number | null> {
     const positions = indexUniqueSheetValues(rows.map((row) => row.rowNumber));
     for (const number of positions.keys()) {
@@ -242,7 +257,7 @@ class GameUpdater {
   ): boolean {
     const sourcePositions = GameUpdater.indexRowNumbers(rows);
     const currentPositions = GameUpdater.indexRowNumbers(
-      GameUpdater.loadRows(sheet),
+      GameUpdater.loadRowIdentities(sheet, getDataRowCount(sheet)),
     );
     let skippedWrite = false;
     rows.forEach((row) => {
