@@ -136,20 +136,11 @@ class TitleUpdater {
   private static loadRows(
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
   ): TitleSheetRow[] {
-    const titlesDataRowCount = getDataRowCount(titlesSheet);
-    const rows =
-      titlesDataRowCount <= 0
-        ? []
-        : titlesSheet
-            .getRange(
-              SHEET_LAYOUT.FIRST_DATA_ROW,
-              SHEET_LAYOUT.TITLES_START_COLUMN,
-              titlesDataRowCount,
-              SHEET_LAYOUT.TITLE_COLUMN_COUNT,
-            )
-            .getValues()
-            .filter((row) => Boolean(row[TITLE_COLUMN.URL]));
-    return rows;
+    return readSheetDataRows(
+      titlesSheet,
+      SHEET_LAYOUT.TITLE_COLUMN_COUNT,
+      SHEET_LAYOUT.TITLES_START_COLUMN,
+    ).filter((row) => Boolean(row[TITLE_COLUMN.URL]));
   }
 
   /** Appends unseen catalog URLs without replacing existing title cells. */
@@ -165,29 +156,18 @@ class TitleUpdater {
       return;
     }
 
-    const rankingsDataRowCount = getDataRowCount(rankingsSheet);
-    if (rankingsDataRowCount > 0) {
-      rankingsSheet
-        .getRange(
-          SHEET_LAYOUT.FIRST_DATA_ROW,
-          SHEET_LAYOUT.DEFAULT_START_COLUMN,
-          rankingsDataRowCount,
-          1,
-        )
-        .getValues()
-        .forEach((rankingRow) => {
-          const gameUrl = rankingRow[0];
-          if (!gameUrl) {
-            return;
-          }
+    readSheetDataRows(rankingsSheet, 1).forEach((rankingRow) => {
+      const gameUrl = rankingRow[0];
+      if (!gameUrl) {
+        return;
+      }
 
-          const url = String(gameUrl);
-          if (!knownUrls.has(url)) {
-            rows.push([url, '', '', '']);
-            knownUrls.add(url);
-          }
-        });
-    }
+      const url = String(gameUrl);
+      if (!knownUrls.has(url)) {
+        rows.push([url, '', '', '']);
+        knownUrls.add(url);
+      }
+    });
   }
 
   /** Merges fetched cells into the latest URL rows without undoing user edits. */
@@ -203,20 +183,16 @@ class TitleUpdater {
       writeSheetSnapshot(sheet, updatedRows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
       return { rows: updatedRows, edited };
     }
-    const originals = new Map<SpreadsheetCellValue, number | null>();
-    originalRows.forEach((row, index) => {
-      const url = row[TITLE_COLUMN.URL];
-      originals.set(url, originals.has(url) ? null : index);
-    });
-    const currentCounts = new Map<SpreadsheetCellValue, number>();
-    currentRows.forEach((row) => {
-      const url = row[TITLE_COLUMN.URL];
-      currentCounts.set(url, (currentCounts.get(url) ?? 0) + 1);
-    });
+    const originals = indexUniqueSheetValues(
+      originalRows.map((row) => row[TITLE_COLUMN.URL]),
+    );
+    const currentPositions = indexUniqueSheetValues(
+      currentRows.map((row) => row[TITLE_COLUMN.URL]),
+    );
     currentRows.forEach((row) => {
       const url = row[TITLE_COLUMN.URL];
       const index = originals.get(url);
-      if (index == null || currentCounts.get(url) !== 1) {
+      if (index == null || currentPositions.get(url) == null) {
         return;
       }
       const original = originalRows[index];
@@ -237,7 +213,7 @@ class TitleUpdater {
     );
     updatedRows.forEach((row) => {
       const url = row[TITLE_COLUMN.URL];
-      if (!existingUrls.has(url) && !currentCounts.has(url)) {
+      if (!existingUrls.has(url) && !currentPositions.has(url)) {
         currentRows.push(row);
       }
     });

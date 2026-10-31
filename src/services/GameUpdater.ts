@@ -221,17 +221,16 @@ class GameUpdater {
   private static indexRowNumbers(
     rows: readonly GameSheetRow[],
   ): Map<SpreadsheetCellValue, number | null> {
-    const positions = new Map<SpreadsheetCellValue, number | null>();
-    rows.forEach((row, index) => {
-      const number = row.rowNumber;
+    const positions = indexUniqueSheetValues(rows.map((row) => row.rowNumber));
+    for (const number of positions.keys()) {
       if (
-        typeof number === 'number' &&
-        Number.isSafeInteger(number) &&
-        number >= SHEET_LAYOUT.FIRST_DATA_ROW
+        typeof number !== 'number' ||
+        !Number.isSafeInteger(number) ||
+        number < SHEET_LAYOUT.FIRST_DATA_ROW
       ) {
-        positions.set(number, positions.has(number) ? null : index);
+        positions.delete(number);
       }
-    });
+    }
     return positions;
   }
 

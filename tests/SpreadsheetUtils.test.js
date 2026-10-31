@@ -18,7 +18,11 @@ function loadSpreadsheetUtils() {
   return loadScripts({}, [
     {
       path: 'src/shared/SpreadsheetUtils.ts',
-      exports: ['escapeSheetCellValue', 'escapeSheetValues'],
+      exports: [
+        'escapeSheetCellValue',
+        'escapeSheetValues',
+        'indexUniqueSheetValues',
+      ],
     },
   ]);
 }
@@ -89,4 +93,24 @@ test('escapeSheetValues escapes only string cells in each row', () => {
       ['safe', '', "'-leading", 0, false],
     ],
   );
+});
+
+test('identity indexes preserve position zero and keep repeated values ambiguous', () => {
+  const context = loadSpreadsheetUtils();
+  const values = Object.freeze([
+    'first',
+    2,
+    '2',
+    'repeated',
+    'repeated',
+    'repeated',
+  ]);
+  const positions = context.indexUniqueSheetValues(values);
+
+  assert.equal(positions.get('first'), 0);
+  assert.equal(positions.get(2), 1);
+  assert.equal(positions.get('2'), 2);
+  assert.equal(positions.get('repeated'), null);
+  assert.equal(positions.has('missing'), false);
+  assert.equal(context.indexUniqueSheetValues([]).size, 0);
 });

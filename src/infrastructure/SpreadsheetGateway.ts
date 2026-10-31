@@ -28,6 +28,25 @@ function getDataRowCount(sheet: GoogleAppsScript.Spreadsheet.Sheet): number {
   return Math.max(0, sheet.getLastRow() - SHEET_LAYOUT.FIRST_DATA_ROW + 1);
 }
 
+/** Reads a bounded value range, avoiding invalid ranges on header-only sheets. */
+function readSheetDataRows(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  columnCount: number,
+  startColumn: number = SHEET_LAYOUT.DEFAULT_START_COLUMN,
+): SpreadsheetCellRow[] {
+  const rowCount = getDataRowCount(sheet);
+  return rowCount === 0
+    ? []
+    : sheet
+        .getRange(
+          SHEET_LAYOUT.FIRST_DATA_ROW,
+          startColumn,
+          rowCount,
+          columnCount,
+        )
+        .getValues();
+}
+
 /**
  * Clears only data rows below a header when such rows exist.
  *

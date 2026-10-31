@@ -44,3 +44,14 @@ function escapeSheetValues(
 ): SpreadsheetCellRow[] {
   return rows.map((row) => row.map(escapeSheetCellValue));
 }
+
+/** Indexes unique identities; null keeps every occurrence of a duplicate ambiguous. */
+function indexUniqueSheetValues(
+  values: readonly SpreadsheetCellValue[],
+): Map<SpreadsheetCellValue, number | null> {
+  const positions = new Map<SpreadsheetCellValue, number | null>();
+  values.forEach((value, index) => {
+    positions.set(value, positions.has(value) ? null : index);
+  });
+  return positions;
+}
