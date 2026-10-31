@@ -253,3 +253,57 @@ test('RankingUpdater percent-encodes game names in panel URLs', () => {
     `https://ja.boardgamearena.com/gamepanel?game=${encodeURIComponent(reservedName)}`,
   );
 });
+
+test('RankingUpdater preserves the snapshot when any catalog record fails validation', () => {
+  const invalidCatalogs = [
+    {
+      games: [null],
+      tags: [rankingTag()],
+      message: 'Expected game to be an object',
+    },
+    {
+      games: [{ ...rankingGame(), name: 42 }],
+      tags: [rankingTag()],
+      message: 'Expected game.name to be a string',
+    },
+    {
+      games: [{ ...rankingGame(), games_played: '123' }],
+      tags: [rankingTag()],
+      message: 'Expected game.games_played to be a number',
+    },
+    {
+      games: [{ ...rankingGame(), player_numbers: [2, '3'] }],
+      tags: [rankingTag()],
+      message: 'Expected game.player_numbers to be a number array',
+    },
+    {
+      games: [{ ...rankingGame(), tags: [101] }],
+      tags: [rankingTag()],
+      message: 'Expected game.tags to be a tag tuple array',
+    },
+    {
+      games: [rankingGame()],
+      tags: [null],
+      message: 'Expected game tag to be an object',
+    },
+  ];
+  for (const { games, tags, message } of invalidCatalogs) {
+    const sheet = createSheet('Rankings', 5);
+    const sandbox = createSandbox({
+      sheets: { Rankings: sheet },
+      responses: [
+        { status: 200, body: rankingPage([rankingGame(), ...games], tags) },
+      ],
+    });
+    const logs = [];
+    sandbox.Logger.log = (message) => logs.push(message);
+    const context = loadRankings(sandbox);
+
+    assert.throws(() => context.RankingUpdater.run(), { message });
+    assert.equal(getCalls(sheet, 'setValues').length, 0);
+    assert.equal(getCalls(sheet, 'clearContent').length, 0);
+    assert.deepEqual(logs, [
+      `Unable to parse Board Game Arena catalog: ${message}`,
+    ]);
+  }
+});

@@ -11,6 +11,7 @@ groups the implementation by responsibility:
 
 - `src/entrypoints/` — Apps Script functions discovered by name (`onOpen`, `update`)
 - `src/services/` — update orchestration and sheet-specific business logic
+- `src/parsers/` — external-source validation and conversion without HTTP or sheet writes
 - `src/infrastructure/` — Apps Script API adapters for HTTP, properties, triggers, and sheets
 - `src/config/` — sheet layouts, endpoints, runtime limits, and source-specific title rules
 - `src/shared/` — parsing and error-handling utilities shared by services

@@ -2,7 +2,7 @@
  * Shared doubles and loaders for Node-based Apps Script unit tests.
  *
  * Production sources are global TypeScript files without imports. Tests compile
- * them with `module: None` and evaluate them in a vm sandbox that supplies only
+ * them as global scripts and evaluate them in a vm sandbox that supplies only
  * the Apps Script services each scenario needs.
  */
 const assert = require('node:assert/strict');
@@ -229,6 +229,7 @@ function loadRankings(sandbox) {
     { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/infrastructure/HttpClient.ts', exports: ['HttpClient'] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/parsers/RankingParser.ts', exports: [] },
     {
       path: 'src/services/RankingUpdater.ts',
       exports: ['RankingUpdater'],
