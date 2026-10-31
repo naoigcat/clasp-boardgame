@@ -84,6 +84,7 @@ function loadRatingUpdater(sandbox) {
       exports: ['ScriptPropertyStore'],
     },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/parsers/RatingParser.ts', exports: [] },
     { path: 'src/services/RatingUpdater.ts', exports: ['RatingUpdater'] },
   ]);
 }
