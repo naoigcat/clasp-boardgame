@@ -187,8 +187,9 @@ class GameUpdater {
 
   /**
    * Resolves each write by its column-A row number after fetching metadata.
-   * Identities that disappear, duplicate, or change during fetching are left
-   * untouched for a retry. Pre-existing invalid identities are excluded by run.
+   * Identities that disappear or duplicate are left untouched. A changed URL
+   * invalidates its old timestamp so the next batch fetches the replacement.
+   * Pre-existing invalid identities are excluded by run.
    * Never trims physical rows: they may have moved or been added during fetches.
    */
   private static writeRows(
@@ -242,6 +243,22 @@ class GameUpdater {
           Logger.log(
             `Skipping Games row number ${row.rowNumber}: row identity changed.`,
           );
+          if (
+            currentRowNumber === row.rowNumber &&
+            (currentLink?.getLinkUrl() ?? null) !==
+              (row.gameLink?.getLinkUrl() ?? null)
+          ) {
+            // The previous game's refresh window must not suppress a new URL.
+            sheet
+              .getRange(
+                targetRow,
+                SHEET_LAYOUT.GAMES_WRITE_START_COLUMN +
+                  GAME_VALUE_COLUMN.LAST_UPDATED_AT,
+                1,
+                1,
+              )
+              .clearContent();
+          }
           skippedWrite = true;
           return;
         }

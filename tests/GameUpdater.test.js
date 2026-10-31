@@ -1137,7 +1137,7 @@ test('GameUpdater matches row numbers after edits during metadata fetching', asy
       pending: true,
     },
     {
-      name: 'changed link with the same row number is left untouched',
+      name: 'changed link with the same row number clears only its old timestamp',
       edit: (rows) => {
         rows[0].gameLink = createGameRow(
           8,
@@ -1146,6 +1146,7 @@ test('GameUpdater matches row numbers after edits during metadata fetching', asy
       },
       expected: [[3, 3]],
       pending: true,
+      clears: [{ row: 2, column: 27, numRows: 1, numColumns: 1 }],
     },
   ];
   for (const scenario of scenarios) {
@@ -1192,7 +1193,7 @@ test('GameUpdater matches row numbers after edits during metadata fetching', asy
             write.numColumns === (write.column === 10 ? 19 : 1),
         ),
       );
-      assert.deepEqual(sheet.clears, []);
+      assert.deepEqual(sheet.clears, scenario.clears ?? []);
     });
   }
 });
@@ -1373,6 +1374,7 @@ test('GameUpdater checks the destination again immediately before each write', (
   assert.equal(context.GameUpdater.writeRows(sheet, snapshot), true);
   assert.equal(sheet.writes.length, 1);
   assert.equal(sheet.writes[0].a1NotationOrRow, 2);
+  assert.deepEqual(sheet.clears, []);
 });
 
 test('GameUpdater keeps triplicate identities ambiguous without losing position zero', () => {
@@ -1449,4 +1451,105 @@ test('GameUpdater preserves every input column edited during successful and fail
     );
     assert.ok(finalValues[GAME_LAST_UPDATED_AT_COLUMN] instanceof Date);
   }
+});
+
+for (const fails of [false, true]) {
+  test(`GameUpdater fetches a changed fresh link on the next batch after ${fails ? 'failure' : 'success'}`, () => {
+    const rows = [
+      createGameRow(0, 'https://boardgamegeek.com/boardgame/1'),
+      createGameRow(1, 'https://boardgamegeek.com/boardgame/2'),
+    ];
+    rows[1].values[GAME_LAST_UPDATED_AT_COLUMN] = new Date();
+    rows[1].values[GAME_BOARD_GAME_RANK_COLUMN] = 123;
+    rows[1].values[GAME_ERROR_MESSAGE_COLUMN] = fails ? 'old error' : '';
+    rows[1].values[3] = 'manual location';
+    const sheet = createGamesSheet(rows);
+    const context = loadGameUpdater({
+      Date,
+      Logger: { log() {} },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+      },
+    });
+    const fetched = [];
+    context.GameUpdater.fetchGameItem = (ref) => {
+      fetched.push(ref.id);
+      if (ref.id === '1')
+        rows[1].gameLink = createGameRow(
+          1,
+          'https://boardgamegeek.com/boardgame/999',
+        ).gameLink;
+      if (ref.id === '999' && fails) throw new Error('new request failed');
+      return {};
+    };
+    context.GameUpdater.applyGameItem = (row, _item, id, current) => {
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = current;
+      row.values[GAME_BOARD_GAME_RANK_COLUMN] = Number(id);
+      row.values[GAME_ERROR_MESSAGE_COLUMN] = '';
+    };
+    assert.equal(context.GameUpdater.run(), true);
+    for (const operation of sheet.operations) {
+      const index = (operation.a1NotationOrRow ?? operation.row) - 2;
+      const offset = operation.column - 3;
+      const values =
+        operation.type === 'setValues'
+          ? operation.values[0]
+          : Array(operation.numColumns).fill('');
+      rows[index].values.splice(offset, operation.numColumns, ...values);
+    }
+    sheet.writes.length = 0;
+    sheet.clears.length = 0;
+    sheet.operations.length = 0;
+    assert.equal(context.GameUpdater.run(), false);
+    assert.deepEqual(fetched, ['1', '999']);
+    const written = writtenGameRows(sheet)[1];
+    assert.equal(written[GAME_BOARD_GAME_RANK_COLUMN], fails ? 123 : 999);
+    assert.equal(
+      written[GAME_ERROR_MESSAGE_COLUMN],
+      fails ? 'new request failed' : '',
+    );
+    assert.equal(rows[1].values[3], 'manual location');
+    assert.deepEqual(sheet.clears, []);
+  });
+}
+
+test('GameUpdater preserves the refresh timestamp for a label-only link edit', () => {
+  const url = 'https://boardgamegeek.com/boardgame/2';
+  const rows = [createGameRow(0, url)];
+  const sheet = createGamesSheet(rows);
+  const context = loadGameUpdater({ Date, Logger: { log() {} } });
+  const snapshot = context.GameUpdater.loadRows(sheet);
+  rows[0].gameLink = { getText: () => 'manual label', getLinkUrl: () => url };
+  assert.equal(context.GameUpdater.writeRows(sheet, snapshot), true);
+  assert.deepEqual(sheet.writes, []);
+  assert.deepEqual(sheet.clears, []);
+});
+
+test('GameUpdater reports a timestamp invalidation failure without overwriting the changed game', () => {
+  const rows = [createGameRow(0, 'https://boardgamegeek.com/boardgame/2')];
+  const sheet = createGamesSheet(rows);
+  const context = loadGameUpdater({ Date, Logger: { log() {} } });
+  const snapshot = context.GameUpdater.loadRows(sheet);
+  rows[0].gameLink = createGameRow(
+    0,
+    'https://boardgamegeek.com/boardgame/999',
+  ).gameLink;
+  const getRange = sheet.getRange;
+  sheet.getRange = (...args) => {
+    const range = getRange(...args);
+    range.clearContent = () => {
+      throw new Error('clearContent failed');
+    };
+    return range;
+  };
+  assert.throws(
+    () => context.GameUpdater.writeRows(sheet, snapshot),
+    /clearContent failed/,
+  );
+  assert.deepEqual(sheet.writes, []);
+  assert.deepEqual(sheet.clears, []);
+  assert.equal(
+    rows[0].gameLink.getLinkUrl(),
+    'https://boardgamegeek.com/boardgame/999',
+  );
 });
