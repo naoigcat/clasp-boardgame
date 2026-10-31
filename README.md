@@ -30,7 +30,9 @@ Apps Script execution:
 2. The coordinator saves the Games phase and creates one five-minute,
    time-driven trigger.
 3. Each trigger execution refreshes stale BoardGameGeek game rows until about
-   180 seconds have elapsed. A game is stale when it has never been updated,
+   180 seconds have elapsed, including sheet writes. Each attempted row is saved
+   before the next request. Fresh rows also have their formula inputs cleared;
+   any remaining sheet writes resume on the next trigger. A game is stale when it has never been updated,
    its last successful update is seven days old or older, or its last failed
    attempt is one day old or older. Remaining stale rows resume on the next
    trigger.

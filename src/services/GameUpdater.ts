@@ -32,9 +32,8 @@ type PlayerRecommendations = Record<string, string>;
 /**
  * Tracks work consumed by the current Apps Script invocation.
  *
- * The soft runtime budget is checked before each eligible row rather than by
- * slicing the sorted list up front so skipped fresh rows do not consume time
- * budget slots, and partial progress can still flush before a hard timeout.
+ * The soft runtime budget includes both requests and sheet writes. Each row
+ * is saved before the next request starts so a timeout cannot lose a batch.
  */
 interface GameBatchProgress {
   /** Epoch milliseconds when this invocation began processing rows. */
@@ -83,20 +82,60 @@ class GameUpdater {
     // A single reference time prevents a long batch from making equivalent rows
     // appear fresh or stale solely because they were evaluated later.
     const current = new Date();
-    if (!GameUpdater.hasPendingRows(rows, current)) {
-      return GameUpdater.writeRows(sheet, rows);
-    }
-
     const progress: GameBatchProgress = {
       startedAtMilliseconds: Date.now(),
       processedCount: 0,
     };
     try {
-      GameUpdater.sortByOldestUpdate(rows).forEach((row) => {
+      const sortedRows = GameUpdater.sortByOldestUpdate(rows);
+      // Sorting or edits invalidate offsets; restarting is safe because each
+      // completed row has already been saved with its refresh timestamp.
+      const rowsHash = JSON.stringify(
+        Utilities.computeDigest(
+          Utilities.DigestAlgorithm.SHA_256,
+          JSON.stringify(
+            sortedRows.map((row) => [
+              row.rowNumber,
+              row.gameLink?.getLinkUrl(),
+              row.gameLink?.getText(),
+            ]),
+          ),
+        ),
+      );
+      const saved = JSON.parse(
+        ScriptPropertyStore.getOptionalValue(
+          UPDATE_QUEUE_CONFIG.GAME_BATCH_ROW_PROPERTY_KEY,
+        ) ?? 'null',
+      ) as { row: number; rowsHash: string } | null;
+      const startRow =
+        saved?.rowsHash === rowsHash &&
+        Number.isInteger(saved.row) &&
+        saved.row >= 0 &&
+        saved.row < rows.length
+          ? saved.row
+          : 0;
+      let skippedWrite = false;
+      for (let index = startRow; index < sortedRows.length; index += 1) {
+        if (
+          hasExceededRuntime(
+            progress.startedAtMilliseconds,
+            UPDATE_QUEUE_CONFIG.MAX_RUNTIME_MILLISECONDS,
+          )
+        ) {
+          ScriptPropertyStore.set(
+            UPDATE_QUEUE_CONFIG.GAME_BATCH_ROW_PROPERTY_KEY,
+            JSON.stringify({ row: index, rowsHash }),
+          );
+          return true;
+        }
+        const row = sortedRows[index];
         GameUpdater.updateRow(row, current, progress);
-      });
-
-      const skippedWrite = GameUpdater.writeRows(sheet, rows);
+        // Save each result before another request can use the remaining budget.
+        skippedWrite = GameUpdater.writeRows(sheet, [row]) || skippedWrite;
+      }
+      ScriptPropertyStore.remove(
+        UPDATE_QUEUE_CONFIG.GAME_BATCH_ROW_PROPERTY_KEY,
+      );
       return skippedWrite || GameUpdater.hasPendingRows(rows, current);
     } catch (error: unknown) {
       Logger.log(

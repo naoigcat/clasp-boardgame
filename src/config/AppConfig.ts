@@ -30,6 +30,8 @@ const UPDATE_QUEUE_CONFIG = {
   STEP_PROPERTY_KEY: 'UPDATE_STEP',
   /** Next Titles retry row and the URL-order hash that makes its offset valid. */
   TITLE_RETRY_ROW_PROPERTY_KEY: 'TITLE_RETRY_ROW',
+  /** Next Games row and identity hash for resuming bounded sheet writes. */
+  GAME_BATCH_ROW_PROPERTY_KEY: 'GAME_BATCH_ROW',
   /** Stored value while BoardGameGeek game metadata is still pending. */
   GAMES_STEP: 'games',
   /** Stored value after Games finishes and title normalization remains. */

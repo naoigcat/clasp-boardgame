@@ -9,6 +9,7 @@
  */
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { createHash } = require('node:crypto');
 
 const { createClockDate, loadScripts } = require('./helpers/appScriptHarness');
 
@@ -215,7 +216,9 @@ function writtenGameRows(sheet) {
     row.splice(write.column - 3, write.numColumns, ...write.values[0]);
     rows.set(write.a1NotationOrRow, row);
   }
-  return [...rows.values()];
+  return [...rows.entries()]
+    .sort(([first], [second]) => first - second)
+    .map(([, values]) => values);
 }
 
 /**
@@ -327,9 +330,30 @@ function createGameItemWithTenAndElevenPlayerRecommendations() {
 }
 
 /**
- * Loads the dependencies evaluated by GameUpdater before it begins API work.
+ * Supplies persistent queue properties and the Apps Script hashing API.
  */
+function addGameQueueServices(sandbox) {
+  const properties = new Map();
+  const getProperties = sandbox.PropertiesService?.getScriptProperties;
+  sandbox.PropertiesService = {
+    getScriptProperties: () => ({
+      getProperty: (key) => properties.get(key) ?? null,
+      setProperty: (key, value) => properties.set(key, value),
+      deleteProperty: (key) => properties.delete(key),
+      ...getProperties?.(),
+    }),
+  };
+  sandbox.Utilities = {
+    DigestAlgorithm: { SHA_256: 'sha256' },
+    computeDigest: (_algorithm, value) => [
+      ...createHash('sha256').update(value).digest(),
+    ],
+    ...sandbox.Utilities,
+  };
+}
+
 function loadGameUpdater(sandbox) {
+  addGameQueueServices(sandbox);
   return loadScripts(sandbox, [
     { path: 'src/config/AppConfig.ts', exports: [] },
     { path: 'src/config/SheetSchema.ts', exports: [] },
@@ -339,6 +363,7 @@ function loadGameUpdater(sandbox) {
     { path: 'src/shared/SpreadsheetUtils.ts', exports: [] },
     { path: 'src/shared/XmlUtils.ts', exports: [] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/infrastructure/ScriptPropertyStore.ts', exports: [] },
     { path: 'src/services/GameUpdater.ts', exports: ['GameUpdater'] },
   ]);
 }
@@ -347,6 +372,7 @@ function loadGameUpdater(sandbox) {
  * Loads GameUpdater with the HTTP client path used for BoardGameGeek fetches.
  */
 function loadGameUpdaterWithHttp(sandbox) {
+  addGameQueueServices(sandbox);
   return loadScripts(sandbox, [
     { path: 'src/config/AppConfig.ts', exports: [] },
     { path: 'src/config/SheetSchema.ts', exports: [] },
@@ -625,7 +651,7 @@ test('GameUpdater leaves Games intact when the first matched-row write fails', (
   assert.deepEqual(gamesSheet.writes, []);
 });
 
-test('GameUpdater clears formula inputs for refreshed and skipped Games rows', () => {
+test('GameUpdater defers untouched rows at the runtime boundary and clears them next time', () => {
   const rows = Array.from({ length: 51 }, (_, index) =>
     createGameRow(index, `https://boardgamegeek.com/boardgame/${index + 1}`),
   );
@@ -665,7 +691,16 @@ test('GameUpdater clears formula inputs for refreshed and skipped Games rows', (
   const writtenRows = writtenGameRows(gamesSheet);
   // null clears the cell for ARRAYFORMULA; '' would leave a blocking blank.
   assert.deepEqual(getArrayFormulaInputs(writtenRows[0]), Array(5).fill(null));
-  assert.deepEqual(getArrayFormulaInputs(writtenRows[50]), Array(5).fill(null));
+  assert.equal(writtenRows.length, 50);
+  writtenRows.forEach((values, index) => {
+    rows[index].values = values;
+  });
+  gamesSheet.writes.length = 0;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.deepEqual(
+    getArrayFormulaInputs(writtenGameRows(gamesSheet)[50]),
+    Array(5).fill(null),
+  );
 });
 
 test('GameUpdater clears formula inputs when a game refresh fails', () => {
@@ -866,10 +901,7 @@ test('GameUpdater advances past permanently failing head rows on the next batch'
   };
 
   assert.equal(context.GameUpdater.run(), true);
-  assert.deepEqual(
-    getArrayFormulaInputs(writtenGameRows(gamesSheet)[50]),
-    Array(5).fill(null),
-  );
+  assert.equal(writtenGameRows(gamesSheet).length, 50);
 
   // The sheet double reads from the source row objects, so persist the first
   // batch write before asserting that the next batch can move past failures.
@@ -1306,18 +1338,10 @@ test('GameUpdater excludes permanent identity errors without fetching or blockin
     assert.ok(sheet.writes.some((write) => write.a1NotationOrRow === 2));
 
     // Exercise the real coordinator through Titles and trigger cleanup.
-    let phase = 'games';
+    const properties = context.PropertiesService.getScriptProperties();
+    properties.setProperty('UPDATE_STEP', 'games');
     let titleRuns = 0;
     let removedTriggers = 0;
-    context.ScriptPropertyStore = {
-      getOptionalValue: () => phase,
-      set: (_key, value) => {
-        phase = value;
-      },
-      remove: (key) => {
-        if (key === 'UPDATE_STEP') phase = undefined;
-      },
-    };
     context.TitleUpdater = {
       run: () => {
         titleRuns += 1;
@@ -1336,9 +1360,9 @@ test('GameUpdater excludes permanent identity errors without fetching or blockin
       },
     ]);
     context.UpdateCoordinator.resumePendingPhase();
-    assert.equal(phase, 'titles');
+    assert.equal(properties.getProperty('UPDATE_STEP'), 'titles');
     context.UpdateCoordinator.resumePendingPhase();
-    assert.equal(phase, undefined);
+    assert.equal(properties.getProperty('UPDATE_STEP'), null);
     assert.equal(titleRuns, 1);
     assert.equal(removedTriggers, 1);
 
@@ -1552,4 +1576,136 @@ test('GameUpdater reports a timestamp invalidation failure without overwriting t
     rows[0].gameLink.getLinkUrl(),
     'https://boardgamegeek.com/boardgame/999',
   );
+});
+
+test('GameUpdater saves progress within the time budget and finishes large sheets', () => {
+  for (const staleLastRow of [false, true]) {
+    const { ClockDate, clock } = createClockDate(Date.UTC(2026, 0, 1));
+    const rows = Array.from({ length: 500 }, (_, index) => {
+      const row = createGameRow(
+        index,
+        `https://boardgamegeek.com/boardgame/${index + 1}`,
+      );
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(clock.nowMs);
+      return row;
+    });
+    if (staleLastRow) rows[499].values[GAME_LAST_UPDATED_AT_COLUMN] = '';
+    const sheet = createGamesSheet(rows);
+    const getRange = sheet.getRange;
+    let invocationStart = clock.nowMs;
+    sheet.getRange = (...args) => {
+      const range = getRange(...args);
+      for (const method of [
+        'getValues',
+        'getRichTextValues',
+        'setValues',
+        'clearContent',
+      ]) {
+        const original = range[method];
+        range[method] = (...values) => {
+          clock.nowMs += 100;
+          assert.ok(
+            clock.nowMs - invocationStart < 360000,
+            'execution must not reach the hard timeout',
+          );
+          const result = original(...values);
+          if (method === 'setValues') {
+            rows[args[0] - 2].values.splice(
+              args[1] - 3,
+              args[3],
+              ...values[0][0],
+            );
+          }
+          return result;
+        };
+      }
+      return range;
+    };
+    const context = loadGameUpdater({
+      Date: ClockDate,
+      Logger: { log() {} },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+      },
+    });
+    let fetches = 0;
+    context.GameUpdater.fetchGameItem = () => {
+      fetches++;
+      return {};
+    };
+    context.GameUpdater.applyGameItem = (row, _item, _id, now) => {
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = now;
+    };
+    let pending = true;
+    let batches = 0;
+    while (pending && batches < 10) {
+      invocationStart = clock.nowMs;
+      pending = context.GameUpdater.run();
+      batches++;
+      assert.ok(
+        clock.nowMs - invocationStart < 182000,
+        'sheet writes must share the soft budget',
+      );
+    }
+    assert.equal(
+      pending,
+      false,
+      'queue must finish rather than restart the same prefix',
+    );
+    assert.ok(batches > 1);
+    assert.equal(fetches, staleLastRow ? 1 : 0);
+    assert.ok(
+      rows.every((row) =>
+        getArrayFormulaInputs(row.values).every((value) => value === null),
+      ),
+    );
+    assert.ok(rows[499].values[GAME_LAST_UPDATED_AT_COLUMN] instanceof Date);
+  }
+});
+
+test('GameUpdater keeps its saved position when a resumed sheet write fails', () => {
+  const { ClockDate, clock } = createClockDate(Date.UTC(2026, 0, 1));
+  const rows = Array.from({ length: 3 }, (_, index) => {
+    const row = createGameRow(
+      index,
+      `https://boardgamegeek.com/boardgame/${index + 1}`,
+    );
+    row.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date(clock.nowMs);
+    return row;
+  });
+  const sheet = createGamesSheet(rows);
+  const getRange = sheet.getRange;
+  let fail = false;
+  sheet.getRange = (...args) => {
+    const range = getRange(...args);
+    const setValues = range.setValues;
+    range.setValues = (values) => {
+      if (fail) throw new Error('resumed write failed');
+      setValues(values);
+      if (args[0] === 2 && args[1] === 10) clock.nowMs += 180000;
+    };
+    return range;
+  };
+  const context = loadGameUpdater({
+    Date: ClockDate,
+    Logger: { log() {} },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+    },
+  });
+  assert.equal(context.GameUpdater.run(), true);
+  const properties = context.PropertiesService.getScriptProperties();
+  const saved = properties.getProperty('GAME_BATCH_ROW');
+  assert.equal(JSON.parse(saved).row, 1);
+  fail = true;
+  assert.throws(() => context.GameUpdater.run(), /resumed write failed/);
+  assert.equal(properties.getProperty('GAME_BATCH_ROW'), saved);
+  fail = false;
+  sheet.writes.length = 0;
+  assert.equal(context.GameUpdater.run(), false);
+  assert.deepEqual(
+    [...new Set(sheet.writes.map((write) => write.a1NotationOrRow))],
+    [3, 4],
+  );
+  assert.equal(properties.getProperty('GAME_BATCH_ROW'), null);
 });
