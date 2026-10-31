@@ -25,11 +25,6 @@ interface BoardGameGeekGameReference {
 }
 
 /**
- * Maps a player count to BoardGameGeek's preferred recommendation label.
- */
-type PlayerRecommendations = Record<string, string>;
-
-/**
  * Tracks work consumed by the current Apps Script invocation.
  *
  * The soft runtime budget includes both requests and sheet writes. Each row
@@ -518,98 +513,15 @@ class GameUpdater {
     gameId: string,
     current: Date,
   ): void {
-    const recommendations = GameUpdater.getPlayerRecommendations(
-      gameItem,
-      gameId,
-    );
-    const ratings = getRequiredXmlChild(
-      getRequiredXmlChild(gameItem, 'statistics'),
-      'ratings',
-    );
-    const ranks = getRequiredXmlChild(ratings, 'ranks');
-    // Prefer the overall board-game rank over family-specific rank entries.
-    const boardGameRank = findXmlElementByAttribute(
-      ranks.getChildren('rank'),
-      'name',
-      'boardgame',
-    );
-    const boardGameRankValue = parseDisplayNumber(
-      getRequiredXmlAttributeValue(boardGameRank, 'value'),
-    );
-    const bayesAverage = parseDisplayNumber(
-      getRequiredXmlAttributeValue(
-        getRequiredXmlChild(ratings, 'bayesaverage'),
-        'value',
-      ),
-    );
-    const averageWeight = parseDisplayNumber(
-      getRequiredXmlAttributeValue(
-        getRequiredXmlChild(ratings, 'averageweight'),
-        'value',
-      ),
-    );
-    const playTime = GameUpdater.formatPlayTime(
-      getRequiredXmlAttributeValue(
-        getRequiredXmlChild(gameItem, 'minplaytime'),
-        'value',
-      ),
-      getRequiredXmlAttributeValue(
-        getRequiredXmlChild(gameItem, 'maxplaytime'),
-        'value',
-      ),
-    );
-    const publicationYear = parseDisplayNumber(
-      getRequiredXmlAttributeValue(
-        getRequiredXmlChild(gameItem, 'yearpublished'),
-        'value',
-      ),
-    );
-
-    GameUpdater.writePlayerRecommendations(row, recommendations);
-    row.values[GAME_VALUE_COLUMN.BOARD_GAME_RANK] = boardGameRankValue;
-    row.values[GAME_VALUE_COLUMN.BAYES_AVERAGE] = bayesAverage;
-    row.values[GAME_VALUE_COLUMN.AVERAGE_WEIGHT] = averageWeight;
-    row.values[GAME_VALUE_COLUMN.PLAY_TIME] = playTime;
-    row.values[GAME_VALUE_COLUMN.PUBLICATION_YEAR] = publicationYear;
+    const metadata = BoardGameGeekParser.parse(gameItem, gameId);
+    GameUpdater.writePlayerRecommendations(row, metadata.recommendations);
+    row.values[GAME_VALUE_COLUMN.BOARD_GAME_RANK] = metadata.boardGameRank;
+    row.values[GAME_VALUE_COLUMN.BAYES_AVERAGE] = metadata.bayesAverage;
+    row.values[GAME_VALUE_COLUMN.AVERAGE_WEIGHT] = metadata.averageWeight;
+    row.values[GAME_VALUE_COLUMN.PLAY_TIME] = metadata.playTime;
+    row.values[GAME_VALUE_COLUMN.PUBLICATION_YEAR] = metadata.publicationYear;
     row.values[GAME_VALUE_COLUMN.LAST_UPDATED_AT] = current;
     row.values[GAME_VALUE_COLUMN.ERROR_MESSAGE] = '';
-  }
-
-  /**
-   * Reads preferred player counts from the BoardGameGeek poll and applies known
-   * per-game corrections.
-   *
-   * For each player count, the result with the most votes wins. Overrides are
-   * applied last so curated corrections beat the raw community poll.
-   */
-  private static getPlayerRecommendations(
-    gameItem: XmlElement,
-    gameId: string,
-  ): PlayerRecommendations {
-    const poll = findXmlElementByAttribute(
-      gameItem.getChildren('poll'),
-      'name',
-      'suggested_numplayers',
-    );
-    const recommendations: PlayerRecommendations = {};
-
-    poll.getChildren('results').forEach((results) => {
-      const mostVotedResult = sortXmlElementsByNumericAttribute(
-        results.getChildren('result'),
-        'numvotes',
-      )[0];
-      if (mostVotedResult === undefined) {
-        return;
-      }
-
-      recommendations[getRequiredXmlAttributeValue(results, 'numplayers')] =
-        getRequiredXmlAttributeValue(mostVotedResult, 'value');
-    });
-
-    return {
-      ...recommendations,
-      ...(GAME_PLAYER_COUNT_OVERRIDES[gameId] ?? {}),
-    };
   }
 
   /**
@@ -632,18 +544,6 @@ class GameUpdater {
       row.values[GAME_VALUE_COLUMN.PLAYER_RECOMMENDATION_START + offset] =
         recommendations[playerCount.toString()] ?? '';
     }
-  }
-
-  /**
-   * Formats equal play times as one value and ranges as a readable interval.
-   */
-  private static formatPlayTime(
-    minimumValue: string,
-    maximumValue: string,
-  ): NumericDisplayValue | string {
-    const minimum = parseDisplayNumber(minimumValue);
-    const maximum = parseDisplayNumber(maximumValue);
-    return minimum === maximum ? minimum : `${minimum}-${maximum}`;
   }
 
   /**

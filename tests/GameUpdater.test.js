@@ -378,6 +378,7 @@ function loadGameUpdater(sandbox) {
     { path: 'src/shared/XmlUtils.ts', exports: [] },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
     { path: 'src/infrastructure/ScriptPropertyStore.ts', exports: [] },
+    { path: 'src/parsers/BoardGameGeekParser.ts', exports: [] },
     { path: 'src/services/GameUpdater.ts', exports: ['GameUpdater'] },
   ]);
 }
@@ -401,6 +402,7 @@ function loadGameUpdaterWithHttp(sandbox) {
       exports: ['ScriptPropertyStore'],
     },
     { path: 'src/infrastructure/SpreadsheetGateway.ts', exports: [] },
+    { path: 'src/parsers/BoardGameGeekParser.ts', exports: [] },
     { path: 'src/services/GameUpdater.ts', exports: ['GameUpdater'] },
   ]);
 }
