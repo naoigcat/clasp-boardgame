@@ -41,13 +41,21 @@ class TitleUpdater {
       );
     }
 
-    const rows = TitleUpdater.loadRows(titlesSheet, rankingsSheet);
+    const existingRows = TitleUpdater.loadRows(titlesSheet);
+    const rows = existingRows.map((row) => row.slice());
+    TitleUpdater.appendRankingUrls(rows, rankingsSheet);
+    const originalRows = rows.map((row) => row.slice());
     const pendingRows = rows.filter(TitleUpdater.needsNormalization);
     if (pendingRows.length === 0) {
       // Still compact blank URL slots when every title is already normalized so
       // mid-sheet empty rows do not linger until the next pending URL appears.
-      writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
-      return false;
+      const result = TitleUpdater.writeRows(
+        titlesSheet,
+        existingRows,
+        originalRows,
+        rows,
+      );
+      return result.rows.some(TitleUpdater.needsNormalization);
     }
 
     // Rows that already failed stay eligible for retry, but unattempted rows
@@ -88,7 +96,20 @@ class TitleUpdater {
       nextRetryRow = retryStartRow + index + 1;
     }
 
-    writeSheetSnapshot(titlesSheet, rows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
+    const result = TitleUpdater.writeRows(
+      titlesSheet,
+      existingRows,
+      originalRows,
+      rows,
+    );
+    if (result.edited) {
+      // A positional retry cursor cannot skip new or moved URLs after an edit.
+      ScriptPropertyStore.set(
+        UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
+        '0',
+      );
+      return result.rows.some(TitleUpdater.needsNormalization);
+    }
     if (retryingOnlyFailures) {
       // Advance only after the snapshot succeeds so a write failure cannot
       // make the next execution skip unsaved retry results.
@@ -106,19 +127,9 @@ class TitleUpdater {
     return rows.some(TitleUpdater.needsNormalization);
   }
 
-  /**
-   * Combines existing title rows with Ranking URLs that have not been seen yet.
-   *
-   * New URLs are appended with blank titles so later batches scrape them. Known
-   * URLs keep their prior source title, canonical title, and error cells.
-   * When rankingsSheet is null, only existing Titles rows are returned so a
-   * missing Rankings tab cannot block normalization already in the queue.
-   * Both sheet reads stop at getLastRow so open-ended A1 spans cannot pull the
-   * sheet's maximum row count into memory on large spreadsheets.
-   */
+  /** Loads non-empty URL rows using the sheet's current bounded data range. */
   private static loadRows(
     titlesSheet: GoogleAppsScript.Spreadsheet.Sheet,
-    rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet | null,
   ): TitleSheetRow[] {
     const titlesDataRowCount = getDataRowCount(titlesSheet);
     const rows =
@@ -133,12 +144,20 @@ class TitleUpdater {
             )
             .getValues()
             .filter((row) => Boolean(row[TITLE_COLUMN.URL]));
+    return rows;
+  }
+
+  /** Appends unseen catalog URLs without replacing existing title cells. */
+  private static appendRankingUrls(
+    rows: TitleSheetRow[],
+    rankingsSheet: GoogleAppsScript.Spreadsheet.Sheet | null,
+  ): void {
     const knownUrls = new Set<string>(
       rows.map((row) => String(row[TITLE_COLUMN.URL])),
     );
 
     if (rankingsSheet === null) {
-      return rows;
+      return;
     }
 
     const rankingsDataRowCount = getDataRowCount(rankingsSheet);
@@ -164,8 +183,61 @@ class TitleUpdater {
           }
         });
     }
+  }
 
-    return rows;
+  /** Merges fetched cells into the latest URL rows without undoing user edits. */
+  private static writeRows(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    existingRows: readonly TitleSheetRow[],
+    originalRows: readonly TitleSheetRow[],
+    updatedRows: readonly TitleSheetRow[],
+  ): { rows: readonly TitleSheetRow[]; edited: boolean } {
+    const currentRows = TitleUpdater.loadRows(sheet);
+    const edited = JSON.stringify(currentRows) !== JSON.stringify(existingRows);
+    if (!edited) {
+      writeSheetSnapshot(sheet, updatedRows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
+      return { rows: updatedRows, edited };
+    }
+    const originals = new Map<SpreadsheetCellValue, number | null>();
+    originalRows.forEach((row, index) => {
+      const url = row[TITLE_COLUMN.URL];
+      originals.set(url, originals.has(url) ? null : index);
+    });
+    const currentCounts = new Map<SpreadsheetCellValue, number>();
+    currentRows.forEach((row) => {
+      const url = row[TITLE_COLUMN.URL];
+      currentCounts.set(url, (currentCounts.get(url) ?? 0) + 1);
+    });
+    currentRows.forEach((row) => {
+      const url = row[TITLE_COLUMN.URL];
+      const index = originals.get(url);
+      if (index == null || currentCounts.get(url) !== 1) {
+        return;
+      }
+      const original = originalRows[index];
+      // A changed source invalidates normalization fetched for the old source.
+      if (
+        row[TITLE_COLUMN.SOURCE_TITLE] !== original[TITLE_COLUMN.SOURCE_TITLE]
+      ) {
+        return;
+      }
+      row.forEach((value, column) => {
+        if (column !== TITLE_COLUMN.URL && value === original[column]) {
+          row[column] = updatedRows[index][column];
+        }
+      });
+    });
+    const existingUrls = new Set(
+      existingRows.map((row) => row[TITLE_COLUMN.URL]),
+    );
+    updatedRows.forEach((row) => {
+      const url = row[TITLE_COLUMN.URL];
+      if (!existingUrls.has(url) && !currentCounts.has(url)) {
+        currentRows.push(row);
+      }
+    });
+    writeSheetSnapshot(sheet, currentRows, SHEET_LAYOUT.TITLE_COLUMN_COUNT);
+    return { rows: currentRows, edited };
   }
 
   /**

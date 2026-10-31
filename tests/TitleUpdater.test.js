@@ -401,6 +401,7 @@ test('TitleUpdater bounds Titles and Rankings reads to getLastRow instead of ope
   // must use those getLastRow-derived heights, not open-ended `$A$2:$D` / `$A$2:$A`.
   assert.deepEqual(sandbox.titlesSheet.rangeReads, [
     { row: 2, column: 1, numRows: 2, numColumns: 4 },
+    { row: 2, column: 1, numRows: 2, numColumns: 4 },
   ]);
   assert.deepEqual(sandbox.rankingsSheet.rangeReads, [
     { row: 2, column: 1, numRows: 3, numColumns: 1 },
@@ -867,4 +868,133 @@ test('TitleUpdater preserves retry position when the sheet write fails', () => {
   assert.equal(properties.get('TITLE_RETRY_ROW'), '1');
   assert.deepEqual(sandbox.titlesSheet.writes, []);
   assert.equal(titleRows[1][TITLE_ERROR_COLUMN], 'previous error');
+});
+
+for (const status of [200, 503]) {
+  test(`TitleUpdater preserves edits, reordered URLs and appended rows during HTTP ${status}`, () => {
+    const url = (name) =>
+      `https://ja.boardgamearena.com/gamepanel?game=${name}`;
+    const titleRows = [
+      [url('pending'), '', '', ''],
+      [url('done'), 'source', 'canonical', ''],
+      [url('deleted'), 'old', 'old', ''],
+    ];
+    const sandbox = createTitleSandbox({
+      titleRows,
+      responses: [{ status, body: titlePage('カタン') }],
+    });
+    const fetch = sandbox.UrlFetchApp.fetch;
+    sandbox.UrlFetchApp.fetch = (...args) => {
+      titleRows[1][TITLE_NORMALIZED_COLUMN] = 'manual canonical';
+      titleRows[0][TITLE_SOURCE_COLUMN] = 'manual source';
+      titleRows.splice(2, 1);
+      titleRows.reverse();
+      titleRows.push([url('added'), '', '', '']);
+      return fetch(...args);
+    };
+    const context = loadTitleUpdaterService(sandbox);
+    assert.equal(context.TitleUpdater.run(), true);
+    const written = sandbox.titlesSheet.writes[0].values;
+    assert.deepEqual(
+      written.map((row) => row[0]),
+      [url('done'), url('pending'), url('added')],
+    );
+    assert.equal(written[0][TITLE_NORMALIZED_COLUMN], 'manual canonical');
+    assert.equal(written[1][TITLE_SOURCE_COLUMN], 'manual source');
+    assert.equal(written[1][TITLE_NORMALIZED_COLUMN], '');
+    assert.equal(written[2][TITLE_NORMALIZED_COLUMN], '');
+    assert.deepEqual(sandbox.titlesSheet.clears, []);
+  });
+}
+
+test('TitleUpdater keeps a newly appended URL pending after the final retry', () => {
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=retry', '', '', 'old error'],
+  ];
+  const properties = new Map();
+  const sandbox = createTitleSandbox({
+    titleRows,
+    properties,
+    responses: [{ status: 503, body: '' }],
+  });
+  sandbox.Utilities.sleep = () => {
+    titleRows.push([
+      'https://ja.boardgamearena.com/gamepanel?game=new',
+      '',
+      '',
+      '',
+    ]);
+  };
+  const context = loadTitleUpdaterService(sandbox);
+  assert.equal(context.TitleUpdater.run(), true);
+  assert.equal(properties.get('TITLE_RETRY_ROW'), '0');
+  assert.equal(sandbox.titlesSheet.writes[0].values.length, 2);
+});
+
+for (const status of [200, 503]) {
+  test(`TitleUpdater preserves edited cells while updating unchanged cells after HTTP ${status}`, () => {
+    const titleRows = [
+      [
+        'https://ja.boardgamearena.com/gamepanel?game=edit',
+        '',
+        '',
+        'old error',
+      ],
+    ];
+    const sandbox = createTitleSandbox({
+      titleRows,
+      responses: [{ status, body: titlePage('カタン') }],
+    });
+    sandbox.Utilities.sleep = () => {
+      titleRows[0][TITLE_NORMALIZED_COLUMN] = 'manual canonical';
+      titleRows[0][TITLE_ERROR_COLUMN] = 'manual note';
+    };
+    const context = loadTitleUpdaterService(sandbox);
+    assert.equal(context.TitleUpdater.run(), false);
+    const row = sandbox.titlesSheet.writes[0].values[0];
+    assert.equal(row[TITLE_NORMALIZED_COLUMN], 'manual canonical');
+    assert.equal(row[TITLE_ERROR_COLUMN], 'manual note');
+    assert.equal(row[TITLE_SOURCE_COLUMN], status === 200 ? 'カタン' : '');
+  });
+}
+
+test('TitleUpdater does not resurrect replaced URLs or apply results to new duplicate URLs', () => {
+  for (const duplicate of [false, true]) {
+    const url = 'https://ja.boardgamearena.com/gamepanel?game=old';
+    const titleRows = [[url, '', '', '']];
+    const sandbox = createTitleSandbox({
+      titleRows,
+      responses: [{ status: 200, body: titlePage('カタン') }],
+    });
+    sandbox.Utilities.sleep = () => {
+      if (duplicate) titleRows.push([url, 'manual source', 'manual title', '']);
+      else
+        titleRows[0][0] =
+          'https://ja.boardgamearena.com/gamepanel?game=replaced';
+    };
+    const context = loadTitleUpdaterService(sandbox);
+    assert.equal(context.TitleUpdater.run(), true);
+    assert.deepEqual(sandbox.titlesSheet.writes[0].values, titleRows);
+  }
+});
+
+test('TitleUpdater preserves edits and retry cursor when the merged write fails', () => {
+  const titleRows = [
+    ['https://ja.boardgamearena.com/gamepanel?game=retry', '', '', 'old error'],
+  ];
+  const properties = new Map([['TITLE_RETRY_ROW', '0']]);
+  const sandbox = createTitleSandbox({
+    titleRows,
+    properties,
+    failOnSetValues: true,
+    responses: [{ status: 503, body: '' }],
+  });
+  sandbox.Utilities.sleep = () => {
+    titleRows[0][TITLE_SOURCE_COLUMN] = 'manual source';
+  };
+  const context = loadTitleUpdaterService(sandbox);
+  assert.throws(() => context.TitleUpdater.run(), /setValues failed/);
+  assert.equal(properties.get('TITLE_RETRY_ROW'), '0');
+  assert.equal(titleRows[0][TITLE_SOURCE_COLUMN], 'manual source');
+  assert.deepEqual(sandbox.titlesSheet.operations, []);
 });
