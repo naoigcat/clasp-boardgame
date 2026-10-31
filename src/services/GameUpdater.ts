@@ -136,7 +136,18 @@ class GameUpdater {
       ScriptPropertyStore.remove(
         UPDATE_QUEUE_CONFIG.GAME_BATCH_ROW_PROPERTY_KEY,
       );
-      return skippedWrite || GameUpdater.hasPendingRows(rows, current);
+      // Edits can add eligible games while requests are in flight.
+      const latestRows = GameUpdater.loadRows(sheet);
+      const latestPositions = GameUpdater.indexRowNumbers(latestRows);
+      return (
+        skippedWrite ||
+        GameUpdater.hasPendingRows(
+          latestRows.filter(
+            (row) => latestPositions.get(row.rowNumber) != null,
+          ),
+          current,
+        )
+      );
     } catch (error: unknown) {
       Logger.log(
         `Failed after processing ${progress.processedCount} games: ${getErrorMessage(error)}`,

@@ -190,6 +190,13 @@ function createGamesSheet(
           };
           writes.push(write);
           operations.push({ type: 'setValues', ...write });
+          values.forEach((valueRow, index) => {
+            rows[a1NotationOrRow - 2 + index].values.splice(
+              column - 3,
+              numColumns,
+              ...valueRow,
+            );
+          });
         },
         clearContent() {
           const clear = {
@@ -200,6 +207,13 @@ function createGamesSheet(
           };
           clears.push(clear);
           operations.push({ type: 'clearContent', ...clear });
+          for (let index = 0; index < numRows; index += 1) {
+            rows[a1NotationOrRow - 2 + index].values.splice(
+              column - 3,
+              numColumns,
+              ...Array(numColumns).fill(''),
+            );
+          }
         },
       };
 
@@ -1137,14 +1151,14 @@ test('GameUpdater matches row numbers after edits during metadata fetching', asy
       pending: false,
     },
     {
-      name: 'inserting a game preserves the new row',
+      name: 'inserting a game preserves the new row and keeps it queued',
       edit: (rows) =>
         rows.unshift(createGameRow(8, 'https://boardgamegeek.com/boardgame/9')),
       expected: [
         [2, 3],
         [3, 4],
       ],
-      pending: false,
+      pending: true,
     },
     {
       name: 'deleting a game never writes its values onto the next row',
@@ -1608,15 +1622,7 @@ test('GameUpdater saves progress within the time budget and finishes large sheet
             clock.nowMs - invocationStart < 360000,
             'execution must not reach the hard timeout',
           );
-          const result = original(...values);
-          if (method === 'setValues') {
-            rows[args[0] - 2].values.splice(
-              args[1] - 3,
-              args[3],
-              ...values[0][0],
-            );
-          }
-          return result;
+          return original(...values);
         };
       }
       return range;
@@ -1709,3 +1715,121 @@ test('GameUpdater keeps its saved position when a resumed sheet write fails', ()
   );
   assert.equal(properties.getProperty('GAME_BATCH_ROW'), null);
 });
+
+for (const scenario of [
+  {
+    name: 'appended stale row',
+    edit: (rows, added) => rows.push(added),
+    pending: true,
+  },
+  {
+    name: 'inserted stale row',
+    edit: (rows, added) => rows.unshift(added),
+    pending: true,
+  },
+  {
+    name: 'appended row after fetch failure',
+    edit: (rows, added) => rows.push(added),
+    pending: true,
+    fails: true,
+  },
+  {
+    name: 'appended fresh row',
+    edit: (rows, added) => {
+      added.values[GAME_LAST_UPDATED_AT_COLUMN] = new Date();
+      rows.push(added);
+    },
+    pending: false,
+  },
+  {
+    name: 'appended row without hyperlink',
+    edit: (rows, added) => {
+      added.gameLink = { getText: () => 'Owned', getLinkUrl: () => null };
+      rows.push(added);
+    },
+    pending: false,
+  },
+  {
+    name: 'appended invalid identity',
+    edit: (rows, added) => {
+      added.rowNumber = '';
+      rows.push(added);
+    },
+    pending: false,
+  },
+  {
+    name: 'appended duplicate identities',
+    edit: (rows, added) =>
+      rows.push(added, { ...added, values: added.values.slice() }),
+    pending: false,
+  },
+  {
+    name: 'repaired excluded identity',
+    initialInvalid: true,
+    edit: (rows, added) => {
+      rows[1].rowNumber = added.rowNumber;
+    },
+    pending: true,
+  },
+]) {
+  test(`Games completion checks latest rows: ${scenario.name}`, () => {
+    const rows = [createGameRow(0, 'https://boardgamegeek.com/boardgame/1')];
+    if (scenario.initialInvalid) {
+      rows.push({
+        ...createGameRow(8, 'https://boardgamegeek.com/boardgame/9'),
+        rowNumber: '',
+      });
+    }
+    const added = createGameRow(8, 'https://boardgamegeek.com/boardgame/9');
+    added.values[GAME_LAST_UPDATED_AT_COLUMN] = '';
+    const sheet = createGamesSheet(rows);
+    const context = loadGameUpdater({
+      Date,
+      Logger: { log() {} },
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }),
+      },
+    });
+    const fetched = [];
+    context.GameUpdater.fetchGameItem = (ref) => {
+      fetched.push(ref.id);
+      if (fetched.length === 1) {
+        scenario.edit(rows, added);
+        if (scenario.fails) throw Error('upstream unavailable');
+      }
+      return {};
+    };
+    context.GameUpdater.applyGameItem = (row, _item, _id, now) => {
+      row.values[GAME_LAST_UPDATED_AT_COLUMN] = now;
+      row.values[GAME_ERROR_MESSAGE_COLUMN] = '';
+    };
+    const properties = context.PropertiesService.getScriptProperties();
+    properties.setProperty('UPDATE_STEP', 'games');
+    loadScripts(context, [
+      {
+        path: 'src/services/UpdateCoordinator.ts',
+        exports: ['UpdateCoordinator'],
+      },
+    ]);
+    context.UpdateCoordinator.resumePendingPhase();
+    assert.equal(
+      properties.getProperty('UPDATE_STEP'),
+      scenario.pending ? 'games' : 'titles',
+    );
+    assert.deepEqual(fetched, ['1']);
+    if (scenario.pending) {
+      context.UpdateCoordinator.resumePendingPhase();
+      assert.deepEqual(fetched, ['1', '9']);
+      assert.equal(properties.getProperty('UPDATE_STEP'), 'titles');
+      assert.ok(
+        rows.find((row) => row.rowNumber === 10).values[
+          GAME_LAST_UPDATED_AT_COLUMN
+        ] instanceof Date,
+      );
+    }
+    assert.equal(
+      rows.find((row) => row.rowNumber === 2).values[GAME_ERROR_MESSAGE_COLUMN],
+      scenario.fails ? 'upstream unavailable' : '',
+    );
+  });
+}
