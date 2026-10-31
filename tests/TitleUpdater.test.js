@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { createHash } = require('node:crypto');
 
 const { createClockDate, loadScripts } = require('./helpers/appScriptHarness');
 
@@ -191,6 +192,13 @@ function createTitleSandbox({
     },
     Utilities: {
       sleep() {},
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      computeDigest(algorithm, value) {
+        return Array.from(
+          createHash(algorithm).update(value).digest(),
+          (byte) => (byte > 127 ? byte - 256 : byte),
+        );
+      },
     },
     Logger: {
       log() {},
@@ -840,7 +848,7 @@ test('TitleUpdater retry position survives successful rows and completes at the 
   assert.equal(titleRows[2][TITLE_NORMALIZED_COLUMN], 'カルカソンヌ');
 });
 
-test('TitleUpdater preserves retry position when the sheet write fails', () => {
+test('TitleUpdater preserves legacy retry state when the sheet write fails', () => {
   const properties = new Map([['TITLE_RETRY_ROW', '1']]);
   const titleRows = [
     [
@@ -859,12 +867,19 @@ test('TitleUpdater preserves retry position when the sheet write fails', () => {
   const sandbox = createTitleSandbox({
     titleRows,
     properties,
-    responses: [{ status: 500, body: 'error' }],
+    responses: Array.from({ length: 2 }, () => ({
+      status: 500,
+      body: 'error',
+    })),
     failOnSetValues: true,
   });
   const context = loadTitleUpdaterService(sandbox);
   assert.throws(() => context.TitleUpdater.run(), /setValues failed/);
-  assert.deepEqual(sandbox.fetchedUrls, [titleRows[1][TITLE_URL_COLUMN]]);
+  // A legacy offset has no URL order to verify, so restart rather than skip.
+  assert.deepEqual(
+    sandbox.fetchedUrls,
+    titleRows.map((row) => row[TITLE_URL_COLUMN]),
+  );
   assert.equal(properties.get('TITLE_RETRY_ROW'), '1');
   assert.deepEqual(sandbox.titlesSheet.writes, []);
   assert.equal(titleRows[1][TITLE_ERROR_COLUMN], 'previous error');
@@ -927,7 +942,7 @@ test('TitleUpdater keeps a newly appended URL pending after the final retry', ()
   };
   const context = loadTitleUpdaterService(sandbox);
   assert.equal(context.TitleUpdater.run(), true);
-  assert.equal(properties.get('TITLE_RETRY_ROW'), '0');
+  assert.equal(properties.has('TITLE_RETRY_ROW'), false);
   assert.equal(sandbox.titlesSheet.writes[0].values.length, 2);
 });
 
@@ -997,4 +1012,118 @@ test('TitleUpdater preserves edits and retry cursor when the merged write fails'
   assert.equal(properties.get('TITLE_RETRY_ROW'), '0');
   assert.equal(titleRows[0][TITLE_SOURCE_COLUMN], 'manual source');
   assert.deepEqual(sandbox.titlesSheet.operations, []);
+});
+
+for (const edit of ['delete', 'reorder', 'insert']) {
+  test(`TitleUpdater retries every remaining URL after ${edit} between executions`, () => {
+    const url = (name) =>
+      `https://ja.boardgamearena.com/gamepanel?game=${name}`;
+    const titleRows = ['a', 'b', 'c'].map((name) => [
+      url(name),
+      '',
+      '',
+      'old error',
+    ]);
+    const properties = new Map();
+    const { ClockDate, clock } = createClockDate();
+    const first = createTitleSandbox({
+      titleRows,
+      properties,
+      DateConstructor: ClockDate,
+      responses: [{ status: 503, body: '' }],
+    });
+    first.Utilities.sleep = () => {
+      clock.nowMs += 180000;
+    };
+    assert.equal(loadTitleUpdaterService(first).TitleUpdater.run(), true);
+    assert.deepEqual(first.fetchedUrls, [url('a')]);
+    titleRows.splice(
+      0,
+      titleRows.length,
+      ...first.titlesSheet.writes[0].values,
+    );
+    if (edit === 'delete') titleRows.shift();
+    if (edit === 'reorder') titleRows.reverse();
+    if (edit === 'insert') titleRows.unshift([url('new'), '', '', 'old error']);
+    const second = createTitleSandbox({
+      titleRows,
+      properties,
+      responses: titleRows.map(() => ({ status: 503, body: '' })),
+    });
+    assert.equal(loadTitleUpdaterService(second).TitleUpdater.run(), false);
+    for (const row of titleRows)
+      assert.ok(
+        second.fetchedUrls.includes(row[0]),
+        `URL was skipped: ${row[0]}`,
+      );
+    assert.equal(second.titlesSheet.writes[0].values.length, titleRows.length);
+  });
+}
+
+test('TitleUpdater retains a verified retry cursor after a failed write and retries unsaved URLs', () => {
+  const titleRows = ['a', 'b', 'c'].map((name) => [
+    `https://ja.boardgamearena.com/gamepanel?game=${name}`,
+    '',
+    '',
+    'old error',
+  ]);
+  const properties = new Map();
+  const { ClockDate, clock } = createClockDate();
+  const first = createTitleSandbox({
+    titleRows,
+    properties,
+    DateConstructor: ClockDate,
+    responses: [{ status: 503, body: '' }],
+  });
+  first.Utilities.sleep = () => {
+    clock.nowMs += 180000;
+  };
+  assert.equal(loadTitleUpdaterService(first).TitleUpdater.run(), true);
+  titleRows.splice(0, titleRows.length, ...first.titlesSheet.writes[0].values);
+  const cursor = properties.get('TITLE_RETRY_ROW');
+  for (const failOnSetValues of [true, false]) {
+    const sandbox = createTitleSandbox({
+      titleRows,
+      properties,
+      failOnSetValues,
+      responses: [
+        { status: 503, body: '' },
+        { status: 503, body: '' },
+      ],
+    });
+    const run = () => loadTitleUpdaterService(sandbox).TitleUpdater.run();
+    if (failOnSetValues) {
+      assert.throws(run, /setValues failed/);
+      assert.equal(properties.get('TITLE_RETRY_ROW'), cursor);
+      assert.deepEqual(sandbox.titlesSheet.operations, []);
+    } else {
+      assert.equal(run(), false);
+    }
+    assert.deepEqual(
+      sandbox.fetchedUrls,
+      titleRows.slice(1).map((row) => row[0]),
+    );
+  }
+});
+
+test('TitleUpdater safely restarts an unverifiable legacy offset past the current sheet', () => {
+  const titleRows = [
+    [
+      'https://ja.boardgamearena.com/gamepanel?game=remaining',
+      '',
+      '',
+      'old error',
+    ],
+  ];
+  const sandbox = createTitleSandbox({
+    titleRows,
+    properties: new Map([['TITLE_RETRY_ROW', '180']]),
+    responses: [{ status: 200, body: titlePage('カタン') }],
+  });
+  assert.equal(loadTitleUpdaterService(sandbox).TitleUpdater.run(), false);
+  assert.deepEqual(sandbox.fetchedUrls, [titleRows[0][0]]);
+  assert.equal(
+    sandbox.titlesSheet.writes[0].values[0][TITLE_NORMALIZED_COLUMN],
+    'カタン',
+  );
 });

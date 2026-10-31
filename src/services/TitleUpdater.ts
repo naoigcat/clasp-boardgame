@@ -64,13 +64,20 @@ class TitleUpdater {
       (row) => !row[TITLE_COLUMN.ERROR_MESSAGE],
     );
     const retryingOnlyFailures = preferredRows.length === 0;
-    // Use the full row position: successful retries disappear from pendingRows,
-    // so an offset in that shrinking list would skip later failures.
-    const retryStartRow = Number(
+    const urlsHash = JSON.stringify(
+      Utilities.computeDigest(
+        Utilities.DigestAlgorithm.SHA_256,
+        JSON.stringify(rows.map((row) => row[TITLE_COLUMN.URL])),
+      ),
+    );
+    const savedRetry = JSON.parse(
       ScriptPropertyStore.getOptionalValue(
         UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
-      ) ?? '0',
-    );
+      ) ?? 'null',
+    ) as { row: number; urlsHash: string } | null;
+    // Row offsets are valid only while the URL order is unchanged between runs.
+    const retryStartRow =
+      savedRetry?.urlsHash === urlsHash ? savedRetry.row : 0;
     const candidateRows = retryingOnlyFailures
       ? rows.slice(retryStartRow)
       : preferredRows;
@@ -103,10 +110,8 @@ class TitleUpdater {
       rows,
     );
     if (result.edited) {
-      // A positional retry cursor cannot skip new or moved URLs after an edit.
-      ScriptPropertyStore.set(
+      ScriptPropertyStore.remove(
         UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
-        '0',
       );
       return result.rows.some(TitleUpdater.needsNormalization);
     }
@@ -115,7 +120,7 @@ class TitleUpdater {
       // make the next execution skip unsaved retry results.
       ScriptPropertyStore.set(
         UPDATE_QUEUE_CONFIG.TITLE_RETRY_ROW_PROPERTY_KEY,
-        String(nextRetryRow),
+        JSON.stringify({ row: nextRetryRow, urlsHash }),
       );
       // One completed retry pass ends the cycle. If the soft runtime budget
       // stopped the pass early, keep the trigger so remaining failures still
