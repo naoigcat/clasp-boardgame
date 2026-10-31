@@ -70,6 +70,7 @@ function createTitleSandbox({
     clears,
     operations,
     rangeReads: titlesRangeReads,
+    getMaxRows: () => Math.max(1000, titleRows.length + rankingUrls.length + 1),
     getLastRow() {
       // Header row plus every physical data row, including mid-sheet blanks.
       return titleRows.length + 1;

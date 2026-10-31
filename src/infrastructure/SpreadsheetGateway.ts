@@ -81,6 +81,12 @@ function writeSheetSnapshot(
     return;
   }
 
+  const lastRequiredRow = SHEET_LAYOUT.FIRST_DATA_ROW + rows.length - 1;
+  const maxRows = sheet.getMaxRows();
+  if (lastRequiredRow > maxRows) {
+    sheet.insertRowsAfter(maxRows, lastRequiredRow - maxRows);
+  }
+
   sheet
     .getRange(
       SHEET_LAYOUT.FIRST_DATA_ROW,

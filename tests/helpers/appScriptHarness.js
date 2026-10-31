@@ -121,17 +121,31 @@ function createClockDate(initialMs = 0) {
  * `failOnSetValues` lets regression tests prove writers clear only after a
  * successful rewrite, matching Titles' write-then-trim surplus pattern.
  */
-function createSheet(name, lastRow, { failOnSetValues = false } = {}) {
+function createSheet(
+  name,
+  lastRow,
+  { failOnSetValues = false, maxRows = Math.max(1000, lastRow) } = {},
+) {
   const calls = [];
   return {
     name,
     calls,
+    getMaxRows() {
+      return maxRows;
+    },
+    insertRowsAfter(afterPosition, howMany) {
+      calls.push({ type: 'insertRowsAfter', afterPosition, howMany });
+      maxRows += howMany;
+    },
     getLastRow() {
       calls.push({ type: 'getLastRow' });
       return lastRow;
     },
     getRange(row, column, numRows, numColumns) {
       calls.push({ type: 'getRange', row, column, numRows, numColumns });
+      if (row + numRows - 1 > maxRows) {
+        throw new Error('Range exceeds grid limits');
+      }
       if (numRows <= 0) {
         throw new Error(`Invalid range row count: ${numRows}`);
       }
