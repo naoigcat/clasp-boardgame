@@ -1,0 +1,4 @@
+interface:
+  display_name: "ボドゲーマ → BGG登録用HTML"
+  short_description: "ボドゲーマの作品ページからBGG登録項目を調べてHTMLで出力"
+  default_prompt: "$bodoge-to-bgg を使い、このボドゲーマのページからBoardGameGeekのボードゲーム作成画面へ入力する項目をHTMLファイルにまとめてください。"
