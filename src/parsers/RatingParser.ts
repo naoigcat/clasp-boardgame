@@ -142,7 +142,9 @@ class RatingParser {
       return null;
     }
 
-    return cleanedTitle;
+    return cleanedTitle.startsWith('アンロック！')
+      ? cleanedTitle.replace(/[：:\s・]/g, '')
+      : cleanedTitle;
   }
 
   /**
